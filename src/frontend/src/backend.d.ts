@@ -64,6 +64,15 @@ export interface LessonProgress {
     isCompleted: boolean;
     courseId: CourseId;
 }
+export interface LearnerCourseReport {
+    learnerPrincipal: Principal;
+    courseId: CourseId;
+    completedLessons: bigint;
+    enrolledAt: Time;
+    startedAt?: Time;
+    completedAt?: Time;
+    isCompleted: boolean;
+}
 export interface UserProfile {
     id: ProfileId;
     principal: Principal;
@@ -106,6 +115,7 @@ export interface backendInterface {
     getMyLessonProgress(courseId: CourseId): Promise<Array<LessonProgress>>;
     getMyPoints(): Promise<bigint>;
     getMyQuizAttempts(courseId: CourseId, quizId: string): Promise<Array<QuizAttempt>>;
+    getReportingData(): Promise<Array<LearnerCourseReport>>;
     getUserCount(): Promise<bigint>;
     getUserProfile(principal: Principal): Promise<UserProfile>;
     incrementCourseViews(id: CourseId): Promise<void>;

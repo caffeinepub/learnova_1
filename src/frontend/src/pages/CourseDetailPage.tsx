@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,12 +25,14 @@ import {
   Image,
   Lock,
   Play,
+  Search,
   Star,
   Trophy,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { UserRole } from "../backend";
 import type {
   Badge as BadgeType,
   Course,
@@ -78,6 +81,19 @@ const TYPE_COLORS: Record<string, string> = {
   Image: "bg-purple-100 text-purple-700",
   Quiz: "bg-orange-100 text-orange-700",
 };
+
+const GRADIENTS = [
+  "from-violet-500 via-indigo-600 to-indigo-700",
+  "from-fuchsia-500 via-purple-600 to-purple-700",
+  "from-cyan-500 via-blue-500 to-blue-700",
+  "from-emerald-500 via-teal-500 to-teal-700",
+  "from-orange-500 via-amber-500 to-red-600",
+  "from-pink-500 via-rose-500 to-rose-700",
+];
+
+function generateDescription(title: string): string {
+  return `Master the fundamentals of ${title} with hands-on exercises and real-world projects.`;
+}
 
 function StarRating({
   value,
@@ -128,6 +144,7 @@ export default function CourseDetailPage() {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
   const [submittingReview, setSubmittingReview] = useState(false);
+  const [lessonSearch, setLessonSearch] = useState("");
 
   const courseIdBig = BigInt(courseId);
 
@@ -156,6 +173,27 @@ export default function CourseDetailPage() {
   });
 
   const course = (courses ?? []).find((c) => c.id.toString() === courseId);
+  const isInstructorOrAdmin =
+    profile?.role === UserRole.admin ||
+    (profile?.role as string) === "instructor";
+
+  if (course && course.isPublished === false && !isInstructorOrAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <Lock className="w-12 h-12 text-muted-foreground" />
+        <h2 className="text-xl font-semibold">Course Not Available</h2>
+        <p className="text-muted-foreground">
+          This course is not currently published.
+        </p>
+        <Button
+          variant="outline"
+          onClick={() => navigate({ to: "/learner/courses" })}
+        >
+          Back to My Courses
+        </Button>
+      </div>
+    );
+  }
 
   const lessons: LessonData[] = (() => {
     try {
@@ -182,6 +220,10 @@ export default function CourseDetailPage() {
 
   const alreadyReviewed = (reviews ?? []).some(
     (r) => r.principal?.toString() === profile?.principal?.toString(),
+  );
+
+  const filteredLessons = lessons.filter((l) =>
+    l.title.toLowerCase().includes(lessonSearch.toLowerCase()),
   );
 
   const handleEnroll = async () => {
@@ -244,6 +286,11 @@ export default function CourseDetailPage() {
         (reviews ?? []).length
       : 0;
 
+  // Gradient index based on courseId
+  const gradientIdx =
+    Number.parseInt(courseId.replace(/\D/g, "") || "0", 10) % GRADIENTS.length;
+  const initial = course?.title.trim()[0]?.toUpperCase() ?? "C";
+
   if (!course) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -295,101 +342,178 @@ export default function CourseDetailPage() {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Progress */}
-        <Card className="mb-6">
-          <CardContent className="pt-5">
-            <div className="flex items-center justify-between mb-2">
-              <span className="font-medium">Your Progress</span>
-              <span className="text-lg font-bold text-primary">
-                {progressPct}%
-              </span>
-            </div>
-            <Progress value={progressPct} className="h-3 mb-2" />
-            <p className="text-sm text-muted-foreground">
-              {completedIds.size} of {lessons.length} lessons completed
-            </p>
-
-            <div className="flex gap-2 mt-4">
-              {!isEnrolled ? (
-                <Button
-                  data-ocid="course_detail.primary_button"
-                  onClick={handleEnroll}
-                  disabled={enrolling}
-                >
-                  {enrolling ? "Enrolling..." : "Enroll Now"}
-                </Button>
-              ) : allComplete ? (
-                <Button
-                  data-ocid="course_detail.primary_button"
-                  onClick={handleComplete}
-                  disabled={completing}
-                  className="bg-green-600 hover:bg-green-700"
-                >
-                  <Trophy className="h-4 w-4 mr-2" />
-                  {completing ? "Completing..." : "Complete Course"}
-                </Button>
-              ) : null}
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Tabs */}
-        <Tabs defaultValue="lessons">
-          <TabsList data-ocid="course_detail.tab" className="mb-4">
-            <TabsTrigger value="lessons">Lessons</TabsTrigger>
+        <Tabs defaultValue="overview">
+          <TabsList data-ocid="course_detail.tab" className="mb-6">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="reviews">Reviews</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="lessons">
-            <div className="space-y-2">
-              {lessons.map((lesson, idx) => {
-                const isDone = completedIds.has(lesson.id);
-                return (
-                  <motion.div
-                    key={lesson.id}
-                    data-ocid={`course_lessons.item.${idx + 1}`}
-                    initial={{ opacity: 0, x: -12 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: idx * 0.04 }}
-                    className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
-                      !isEnrolled
-                        ? "opacity-70"
-                        : "hover:bg-accent cursor-pointer"
-                    }`}
-                    onClick={() => {
-                      if (isEnrolled)
-                        navigate({
-                          to: `/learner/courses/${courseId}/lessons/${lesson.id}`,
-                        });
-                    }}
+          {/* ── Overview Tab ────────────────────────────────────────── */}
+          <TabsContent value="overview">
+            <div className="space-y-6">
+              {/* Cover image block */}
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35 }}
+              >
+                <div
+                  className={`h-48 rounded-2xl overflow-hidden bg-gradient-to-br ${GRADIENTS[gradientIdx]} flex items-center justify-center relative`}
+                >
+                  <span className="text-8xl font-black text-white/25 select-none">
+                    {initial}
+                  </span>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
+                </div>
+
+                <div className="mt-4">
+                  <h2 className="text-2xl font-bold text-foreground mb-1">
+                    {course.title}
+                  </h2>
+                  <p className="text-muted-foreground text-sm leading-relaxed">
+                    {generateDescription(course.title)}
+                  </p>
+                </div>
+              </motion.div>
+
+              {/* Progress section */}
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35, delay: 0.08 }}
+                className="space-y-3"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-foreground">
+                    Progress
+                  </span>
+                  <span className="text-sm font-bold text-primary">
+                    {progressPct}% Completed
+                  </span>
+                </div>
+                <Progress value={progressPct} className="h-3" />
+
+                {/* Stat pills */}
+                <div className="flex gap-2 flex-wrap">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-muted text-muted-foreground px-3 py-1.5 rounded-full border border-border">
+                    <BookOpen className="h-3 w-3" />
+                    Total: {lessons.length}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full border border-emerald-200">
+                    <CheckCircle2 className="h-3 w-3" />
+                    Completed: {completedIds.size}
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-rose-50 text-rose-700 px-3 py-1.5 rounded-full border border-rose-200">
+                    <Clock className="h-3 w-3" />
+                    Incomplete: {lessons.length - completedIds.size}
+                  </span>
+                </div>
+              </motion.div>
+
+              {/* Search bar */}
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: 0.12 }}
+                className="relative"
+              >
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  data-ocid="lessons.search_input"
+                  className="pl-10"
+                  placeholder="Search lessons..."
+                  value={lessonSearch}
+                  onChange={(e) => setLessonSearch(e.target.value)}
+                />
+              </motion.div>
+
+              {/* Lesson list */}
+              <div className="space-y-2">
+                {filteredLessons.length === 0 ? (
+                  <div
+                    data-ocid="lessons.empty_state"
+                    className="text-center py-8 text-muted-foreground text-sm"
                   >
-                    <span className="text-muted-foreground text-sm w-5 text-right">
-                      {idx + 1}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">
-                        {lesson.title}
-                      </p>
-                    </div>
-                    <span
-                      className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium ${TYPE_COLORS[lesson.type]}`}
-                    >
-                      {TYPE_ICONS[lesson.type]}
-                      {lesson.type}
-                    </span>
-                    {isDone ? (
-                      <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
-                    ) : !isEnrolled ? (
-                      <Lock className="h-4 w-4 text-muted-foreground shrink-0" />
-                    ) : (
-                      <Play className="h-4 w-4 text-primary shrink-0" />
-                    )}
-                  </motion.div>
-                );
-              })}
+                    No lessons match your search.
+                  </div>
+                ) : (
+                  filteredLessons.map((lesson, idx) => {
+                    const isDone = completedIds.has(lesson.id);
+                    const isInProgress = isEnrolled && !isDone;
+                    return (
+                      <motion.div
+                        key={lesson.id}
+                        data-ocid={`course_lessons.item.${idx + 1}`}
+                        initial={{ opacity: 0, x: -12 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: idx * 0.04 }}
+                        className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${
+                          !isEnrolled
+                            ? "opacity-70 cursor-default"
+                            : "hover:bg-accent cursor-pointer"
+                        }`}
+                        onClick={() => {
+                          if (isEnrolled)
+                            navigate({
+                              to: `/learner/courses/${courseId}/lessons/${lesson.id}`,
+                            });
+                        }}
+                      >
+                        <span className="text-muted-foreground text-xs w-5 text-right shrink-0">
+                          {idx + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate">
+                            {lesson.title}
+                          </p>
+                        </div>
+                        <span
+                          className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${TYPE_COLORS[lesson.type]}`}
+                        >
+                          {TYPE_ICONS[lesson.type]}
+                          {lesson.type}
+                        </span>
+                        {isDone ? (
+                          <CheckCircle2 className="h-5 w-5 text-blue-500 shrink-0" />
+                        ) : isInProgress ? (
+                          <Play className="h-4 w-4 text-primary shrink-0" />
+                        ) : (
+                          <Lock className="h-4 w-4 text-muted-foreground shrink-0" />
+                        )}
+                      </motion.div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Enroll / Complete Course button */}
+              <div className="flex gap-2 pt-2">
+                {!isEnrolled ? (
+                  <Button
+                    data-ocid="course_detail.primary_button"
+                    onClick={handleEnroll}
+                    disabled={enrolling}
+                    className="w-full sm:w-auto"
+                  >
+                    {enrolling ? "Enrolling..." : "Enroll Now"}
+                  </Button>
+                ) : allComplete ? (
+                  <Button
+                    data-ocid="course_detail.primary_button"
+                    onClick={handleComplete}
+                    disabled={completing}
+                    className="bg-green-600 hover:bg-green-700 w-full sm:w-auto"
+                  >
+                    <Trophy className="h-4 w-4 mr-2" />
+                    {completing ? "Completing..." : "Complete Course"}
+                  </Button>
+                ) : null}
+              </div>
             </div>
           </TabsContent>
 
+          {/* ── Reviews Tab ─────────────────────────────────────────── */}
           <TabsContent value="reviews">
             <div className="space-y-6">
               {/* Aggregate */}

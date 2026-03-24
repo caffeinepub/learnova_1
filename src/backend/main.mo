@@ -4,11 +4,12 @@ import Iter "mo:core/Iter";
 import Time "mo:core/Time";
 import Principal "mo:core/Principal";
 import Array "mo:core/Array";
+import Nat "mo:core/Nat";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
-import Migration "migration";
 
-(with migration = Migration.run)
+
+
 actor {
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
@@ -587,5 +588,67 @@ actor {
       };
     };
   };
-};
 
+  // ** Reporting Data **
+  public type LearnerCourseReport = {
+    learnerPrincipal : Principal;
+    courseId : CourseId;
+    completedLessons : Nat;
+    enrolledAt : Time.Time;
+    startedAt : ?Time.Time;
+    completedAt : ?Time.Time;
+    isCompleted : Bool;
+  };
+
+  public query ({ caller }) func getReportingData() : async [LearnerCourseReport] {
+    let callerProfile = getOrTrap(caller);
+    if (callerProfile.role != #admin and callerProfile.role != #user) {
+      Runtime.trap("Unauthorized: Only admins and instructors can view reporting data");
+    };
+    let result = Map.empty<Text, LearnerCourseReport>();
+    for ((learner, enrollMap) in enrollments.entries()) {
+      for ((_, enrollment) in enrollMap.entries()) {
+        let courseId = enrollment.courseId;
+        let progressArr = switch (lessonProgress.get(learner)) {
+          case (null) { [] };
+          case (?pMap) {
+            pMap.values().filter(func(p) { p.courseId == courseId and p.isCompleted }).toArray()
+          };
+        };
+        // Deduplicate lesson IDs and find earliest completion
+        let seen = Map.empty<Text, Bool>();
+        var completedCount = 0;
+        var firstCompletion : ?Time.Time = null;
+        for (p in progressArr.vals()) {
+          if (not seen.containsKey(p.lessonId)) {
+            seen.add(p.lessonId, true);
+            completedCount += 1;
+            switch (p.completedAt) {
+              case (null) {};
+              case (?t) {
+                switch (firstCompletion) {
+                  case (null) { firstCompletion := ?t };
+                  case (?existing) {
+                    if (t < existing) { firstCompletion := ?t };
+                  };
+                };
+              };
+            };
+          };
+        };
+        let key = learner.toText() # "-" # courseId.toText();
+        let report : LearnerCourseReport = {
+          learnerPrincipal = learner;
+          courseId;
+          completedLessons = completedCount;
+          enrolledAt = enrollment.enrolledAt;
+          startedAt = firstCompletion;
+          completedAt = enrollment.completedAt;
+          isCompleted = enrollment.isCompleted;
+        };
+        result.add(key, report);
+      };
+    };
+    result.values().toArray();
+  };
+};

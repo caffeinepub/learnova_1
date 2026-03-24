@@ -1,35 +1,38 @@
-# LearnOva — Learner Website (Step 3)
+# LearnOva – Points & Badge Logic
 
 ## Current State
-- Authentication, roles, admin/instructor backoffice are live.
-- Instructor can create/edit courses with lessons (Video/Document/Image), options, and quizzes with point rewards.
-- LearnerDashboard exists as a stub at `/learner`.
-- Backend has: UserProfile, Course (with publish/visibility), Lessons implied via frontend state only.
+- `submitQuizAttempt` on the backend already calls `addPointsInternal`, so points ARE accumulated per-quiz-attempt in the canister.
+- `getMyPoints()` returns the real running total from the backend.
+- The profile panel on My Courses page queries `getMyPoints()` via React Query.
+- `LessonPlayerPage` computes badge popup points using **localStorage** (stale, wrong) instead of the backend total.
+- Badge thresholds are inconsistent across files: `LessonPlayerPage` uses Newbie(0), ..., Master(100). `LearnerCoursesPage` uses Newbie(0), ..., Legend(120). Neither matches the user's required tiers.
+- `myPoints` query is never invalidated after quiz completion, so the profile panel doesn't refresh.
 
 ## Requested Changes (Diff)
 
 ### Add
-- **My Courses page** (`/learner/courses`): Grid of enrolled course cards (thumbnail, title, progress %, tags). Search bar. Profile panel sidebar with avatar, points total, earned badges.
-- **Course Detail page** (`/learner/courses/:id`): Hero image + title, progress bar, overview description, tabbed: Lessons | Ratings & Reviews. Lesson list with status icons (locked/complete/in-progress). "Complete Course" CTA when all lessons done.
-- **Full-Screen Lesson Player** (`/learner/courses/:id/lessons/:lessonId`): Renders Video (iframe/video tag), Document (PDF viewer/link), Image (full-size display), or Quiz. Back button to course detail. Mark lesson complete on finish.
-- **Quiz Flow**: One question per page within lesson player. Multiple choice selection, submit answer. Points popup on correct answer (shows points earned for attempt). Supports up to 4 attempt tiers as configured by instructor. Progress through all questions.
-- **Ratings & Reviews tab**: Star rating (1-5) + text review. Show aggregate rating and list of reviews.
-- **Course completion flow**: Button enabled when all lessons complete. Triggers completion state, shows congratulations modal with total points earned and badges awarded.
-- **Backend additions**: Enrollments, lesson progress, quiz attempts/scores, course reviews, learner points/badges.
+- Fetch actual post-attempt total from `actor.getMyPoints()` inside `handleQuizComplete` in LessonPlayerPage.
+- `qc.invalidateQueries(["myPoints"])` after quiz completion so profile panel refreshes live.
 
 ### Modify
-- LearnerDashboard: Update to redirect/navigate to `/learner/courses`.
-- App.tsx: Add new learner routes.
+- **Badge thresholds** unified across both files to exactly match user spec:
+  - Newbie: 20+ pts
+  - Explorer: 40+ pts
+  - Achiever: 60+ pts
+  - Specialist: 80+ pts
+  - Expert: 100+ pts
+  - Master: 120+ pts
+  - (Below 20: "Starter" — no badge unlocked yet)
+- `LessonPlayerPage.handleQuizComplete`: replace localStorage point tracking with live backend fetch.
+- `LearnerCoursesPage` BADGE_TIERS: remove Legend tier, shift thresholds to the spec values.
 
 ### Remove
-- Nothing removed.
+- localStorage-based points tracking in LessonPlayerPage (learnova_learner_points key).
+- Legend badge tier from LearnerCoursesPage.
 
 ## Implementation Plan
-1. Extend Motoko backend with: Enrollment, LessonProgress, QuizAttempt, CourseReview, LearnerBadge types and CRUD functions.
-2. Add new routes in App.tsx: `/learner/courses`, `/learner/courses/:id`, `/learner/courses/:id/lessons/:lessonId`.
-3. Build `LearnerCoursesPage` with course cards, search, profile/badges sidebar.
-4. Build `CourseDetailPage` with progress bar, lesson list tabs, reviews tab, completion button.
-5. Build `LessonPlayerPage` with type-based rendering (video/doc/image/quiz).
-6. Build `QuizPlayerComponent` with per-question flow, attempt tracking, points popup.
-7. Build `RatingsReviews` tab component.
-8. Build course completion modal.
+1. Update `BADGE_TIERS` in `LessonPlayerPage.tsx` to new spec (Starter <20, Newbie 20, Explorer 40, Achiever 60, Specialist 80, Expert 100, Master 120).
+2. In `handleQuizComplete`, after the quiz attempt is submitted, call `actor.getMyPoints()` to get the real total, then invalidate `["myPoints"]` query.
+3. Pass the live backend total to `BadgePopup`.
+4. Update `BADGE_TIERS` in `LearnerCoursesPage.tsx` to match the same spec (remove Legend, adjust thresholds).
+5. Validate and deploy.

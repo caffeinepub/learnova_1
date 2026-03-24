@@ -23,6 +23,7 @@ import LearnerDashboard from "./pages/LearnerDashboard";
 import LessonPlayerPage from "./pages/LessonPlayerPage";
 import LoginPage from "./pages/LoginPage";
 import ProfilePage from "./pages/ProfilePage";
+import ReportingDashboardPage from "./pages/ReportingDashboardPage";
 import UnauthorizedPage from "./pages/UnauthorizedPage";
 
 const rootRoute = createRootRoute({
@@ -107,6 +108,16 @@ const courseEditRoute = createRoute({
   ),
 });
 
+const reportingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/instructor/reporting",
+  component: () => (
+    <ProtectedRoute allowedRoles={["admin", "instructor"]}>
+      <ReportingDashboardPage />
+    </ProtectedRoute>
+  ),
+});
+
 const learnerRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/learner",
@@ -167,6 +178,7 @@ const routeTree = rootRoute.addChildren([
   instructorRoute,
   instructorCoursesRoute,
   courseEditRoute,
+  reportingRoute,
   learnerRoute,
   learnerCoursesRoute,
   courseDetailRoute,

@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { useActor } from "@/hooks/useActor";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, XCircle } from "lucide-react";
+import { CheckCircle2, Info, XCircle } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 
@@ -67,10 +67,12 @@ const SAMPLE_QUIZ: QuizData = {
   ],
 };
 
+type QuizPhase = "intro" | "questions";
+
 interface Props {
   courseId: string;
   quizId: string;
-  onComplete?: () => void;
+  onComplete?: (points: number) => void;
 }
 
 export default function QuizPlayerComponent({
@@ -110,18 +112,17 @@ export default function QuizPlayerComponent({
     return { attempt1: 100, attempt2: 70, attempt3: 40, attempt4: 20 };
   })();
 
+  const [phase, setPhase] = useState<QuizPhase>("intro");
   const [currentQ, setCurrentQ] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [attempts, setAttempts] = useState(0);
   const [totalPoints, setTotalPoints] = useState(0);
-  const [showPointsPopup, setShowPointsPopup] = useState(false);
-  const [lastPoints, setLastPoints] = useState(0);
   const [questionResults, setQuestionResults] = useState<boolean[]>([]);
-  const [finished, setFinished] = useState(false);
 
   const question = quizData.questions[currentQ];
   const totalAttempts = (pastAttempts ?? []).length + 1;
+  const isLastQuestion = currentQ + 1 >= quizData.questions.length;
 
   const getPointsForAttempt = (attemptNum: number) => {
     if (attemptNum === 1) return rewards.attempt1;
@@ -132,17 +133,13 @@ export default function QuizPlayerComponent({
 
   const handleSubmit = () => {
     if (!selected) return;
-    const correct =
-      question.options.find((o) => o.id === selected)?.isCorrect ?? false;
     setSubmitted(true);
     setAttempts((a) => a + 1);
-
+    const correct =
+      question.options.find((o) => o.id === selected)?.isCorrect ?? false;
     if (correct) {
       const pts = getPointsForAttempt(totalAttempts + attempts);
-      setLastPoints(pts);
       setTotalPoints((p) => p + pts);
-      setShowPointsPopup(true);
-      setTimeout(() => setShowPointsPopup(false), 2000);
     }
   };
 
@@ -153,7 +150,7 @@ export default function QuizPlayerComponent({
     const newResults = [...questionResults, correct];
     setQuestionResults(newResults);
 
-    if (currentQ + 1 >= quizData.questions.length) {
+    if (isLastQuestion) {
       // Submit to backend
       if (actor) {
         try {
@@ -166,8 +163,7 @@ export default function QuizPlayerComponent({
           );
         } catch {}
       }
-      setFinished(true);
-      onComplete?.();
+      onComplete?.(totalPoints);
     } else {
       setCurrentQ((q) => q + 1);
       setSelected(null);
@@ -181,55 +177,70 @@ export default function QuizPlayerComponent({
     setSubmitted(false);
   };
 
-  if (finished) {
-    const score = questionResults.filter(Boolean).length;
+  // ── Intro Screen ──
+  if (phase === "intro") {
     return (
       <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="text-center space-y-4 py-8"
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35 }}
+        className="flex flex-col items-center text-center gap-6 py-6"
+        data-ocid="quiz.panel"
       >
-        <div className="text-5xl mb-2">
-          {score === quizData.questions.length
-            ? "🏆"
-            : score >= quizData.questions.length / 2
-              ? "👍"
-              : "📚"}
+        <div className="space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
+            Quiz
+          </p>
+          <h2 className="text-2xl font-bold text-white">{quizData.title}</h2>
         </div>
-        <h3 className="text-2xl font-bold">Quiz Complete!</h3>
-        <p className="text-muted-foreground">
-          {score} / {quizData.questions.length} correct
-        </p>
-        <div className="bg-primary/10 rounded-xl inline-block px-6 py-3">
-          <div className="text-3xl font-bold text-primary">+{totalPoints}</div>
-          <div className="text-sm text-muted-foreground">points earned</div>
+
+        {/* Stats row */}
+        <div className="flex items-center gap-6">
+          <div className="flex flex-col items-center gap-1">
+            <span className="text-3xl font-bold text-blue-400">
+              {quizData.questions.length}
+            </span>
+            <span className="text-xs text-zinc-400 font-medium">
+              {quizData.questions.length === 1 ? "Question" : "Questions"}
+            </span>
+          </div>
+          <div className="w-px h-10 bg-zinc-700" />
+          <div className="flex flex-col items-center gap-1">
+            <span className="text-3xl font-bold text-emerald-400">∞</span>
+            <span className="text-xs text-zinc-400 font-medium">Attempts</span>
+          </div>
         </div>
+
+        {/* Multiple attempts notice */}
+        <div className="flex items-start gap-2.5 bg-blue-500/10 border border-blue-500/25 rounded-xl px-4 py-3 text-left max-w-sm">
+          <Info className="h-4 w-4 text-blue-400 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-blue-300 leading-snug">
+            <span className="font-semibold text-blue-200">
+              Multiple attempts allowed.
+            </span>{" "}
+            You can retake this quiz as many times as you like. Points decrease
+            with each attempt.
+          </p>
+        </div>
+
+        <Button
+          data-ocid="quiz.primary_button"
+          onClick={() => setPhase("questions")}
+          className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-2 rounded-lg font-semibold text-base"
+        >
+          Start Quiz
+        </Button>
       </motion.div>
     );
   }
 
+  // ── Questions Phase ──
   const isCorrect =
     submitted && question.options.find((o) => o.id === selected)?.isCorrect;
   const maxAttempts = 3;
 
   return (
     <div className="relative">
-      {/* Points Popup */}
-      <AnimatePresence>
-        {showPointsPopup && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.5, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.5, y: -20 }}
-            className="absolute -top-12 left-1/2 -translate-x-1/2 z-50"
-          >
-            <div className="bg-green-500 text-white font-bold px-5 py-2 rounded-full text-lg shadow-xl">
-              +{lastPoints} pts! 🎉
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Progress */}
       <div className="flex items-center justify-between mb-4">
         <span className="text-sm text-muted-foreground">
@@ -267,14 +278,14 @@ export default function QuizPlayerComponent({
               "w-full text-left p-3 rounded-lg border transition-all text-sm font-medium ";
             if (submitted) {
               if (opt.isCorrect)
-                classes += "border-green-500 bg-green-50 text-green-800";
+                classes += "border-green-500 bg-green-500/10 text-green-300";
               else if (opt.id === selected && !opt.isCorrect)
-                classes += "border-red-400 bg-red-50 text-red-700";
+                classes += "border-red-400 bg-red-500/10 text-red-300";
               else classes += "border-border opacity-50";
             } else {
               classes +=
                 selected === opt.id
-                  ? "border-primary bg-primary/10 text-primary"
+                  ? "border-blue-500 bg-blue-500/10 text-blue-300"
                   : "border-border hover:border-primary/50 hover:bg-accent cursor-pointer";
             }
             return (
@@ -287,10 +298,10 @@ export default function QuizPlayerComponent({
               >
                 <span className="flex items-center gap-2">
                   {submitted && opt.isCorrect && (
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <CheckCircle2 className="h-4 w-4 text-green-500" />
                   )}
                   {submitted && opt.id === selected && !opt.isCorrect && (
-                    <XCircle className="h-4 w-4 text-red-500" />
+                    <XCircle className="h-4 w-4 text-red-400" />
                   )}
                   {opt.text}
                 </span>
@@ -312,9 +323,7 @@ export default function QuizPlayerComponent({
           </Button>
         ) : isCorrect ? (
           <Button data-ocid="quiz.primary_button" onClick={handleNext}>
-            {currentQ + 1 >= quizData.questions.length
-              ? "Finish Quiz"
-              : "Next Question"}
+            {isLastQuestion ? "Proceed and Complete Quiz" : "Proceed"}
           </Button>
         ) : attempts < maxAttempts ? (
           <div className="flex items-center gap-2">
@@ -329,16 +338,14 @@ export default function QuizPlayerComponent({
               Try Again
             </Button>
             <Button data-ocid="quiz.primary_button" onClick={handleNext}>
-              Skip
+              {isLastQuestion ? "Proceed and Complete Quiz" : "Skip"}
             </Button>
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            <span className="text-sm text-red-500">Max attempts reached</span>
+            <span className="text-sm text-red-400">Max attempts reached</span>
             <Button data-ocid="quiz.primary_button" onClick={handleNext}>
-              {currentQ + 1 >= quizData.questions.length
-                ? "Finish Quiz"
-                : "Next Question"}
+              {isLastQuestion ? "Proceed and Complete Quiz" : "Proceed"}
             </Button>
           </div>
         )}

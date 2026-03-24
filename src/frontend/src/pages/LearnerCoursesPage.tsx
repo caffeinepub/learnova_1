@@ -27,7 +27,7 @@ import { useAuthContext } from "../contexts/AuthContext";
 // ─── Badge Tier System ───────────────────────────────────────────────────────
 const BADGE_TIERS = [
   {
-    name: "Newbie",
+    name: "Starter",
     min: 0,
     max: 19,
     color: "text-slate-500",
@@ -36,7 +36,7 @@ const BADGE_TIERS = [
     icon: Star,
   },
   {
-    name: "Explorer",
+    name: "Newbie",
     min: 20,
     max: 39,
     color: "text-emerald-600",
@@ -45,7 +45,7 @@ const BADGE_TIERS = [
     icon: Sparkles,
   },
   {
-    name: "Achiever",
+    name: "Explorer",
     min: 40,
     max: 59,
     color: "text-blue-600",
@@ -54,7 +54,7 @@ const BADGE_TIERS = [
     icon: BookOpen,
   },
   {
-    name: "Specialist",
+    name: "Achiever",
     min: 60,
     max: 79,
     color: "text-purple-600",
@@ -63,25 +63,25 @@ const BADGE_TIERS = [
     icon: Trophy,
   },
   {
-    name: "Expert",
+    name: "Specialist",
     min: 80,
     max: 99,
     color: "text-orange-600",
     bg: "bg-orange-50",
     border: "border-orange-300",
-    icon: Flame,
+    icon: Zap,
   },
   {
-    name: "Master",
+    name: "Expert",
     min: 100,
     max: 119,
     color: "text-amber-600",
     bg: "bg-amber-50",
     border: "border-amber-300",
-    icon: Crown,
+    icon: Flame,
   },
   {
-    name: "Legend",
+    name: "Master",
     min: 120,
     max: Number.POSITIVE_INFINITY,
     color: "text-rose-600",
@@ -89,7 +89,7 @@ const BADGE_TIERS = [
     border: "border-rose-300",
     icon: Crown,
   },
-] as const;
+];
 
 function getBadgeTier(pts: number) {
   return BADGE_TIERS.findLast((t) => pts >= t.min) ?? BADGE_TIERS[0];

@@ -20,6 +20,9 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuthContext } from "@/contexts/AuthContext";
+import { useActor } from "@/hooks/useActor";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import {
   ArrowLeft,
@@ -47,7 +50,7 @@ import {
   X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 interface Attachment {
@@ -658,6 +661,14 @@ export default function CourseEditPage() {
   const navigate = useNavigate();
   const params = useParams({ strict: false }) as { courseId?: string };
   const courseId = params.courseId ?? "new";
+  const { actor } = useActor();
+  const [saving, setSaving] = useState(false);
+
+  const { data: allCourses } = useQuery({
+    queryKey: ["courses"],
+    queryFn: async () => (actor ? actor.getCourses() : []),
+    enabled: !!actor,
+  });
 
   const [form, setForm] = useState<CourseFormState>({
     title: "Introduction to React & Modern Hooks",
@@ -679,6 +690,18 @@ export default function CourseEditPage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!allCourses) return;
+    const c = allCourses.find((x) => x.id.toString() === courseId);
+    if (!c) return;
+    setForm((prev) => ({
+      ...prev,
+      title: c.title,
+      tags: (c.tags ?? []).join(", "),
+      published: c.isPublished,
+    }));
+  }, [allCourses, courseId]);
 
   function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -757,11 +780,31 @@ export default function CourseEditPage() {
             >
               <Switch
                 checked={form.published}
-                onCheckedChange={(v) => {
+                onCheckedChange={async (v) => {
                   setForm((p) => ({ ...p, published: v }));
-                  toast.success(
-                    v ? "Course published!" : "Course set to draft.",
-                  );
+                  if (actor && courseId !== "new") {
+                    try {
+                      await actor.updateCourse(BigInt(courseId), {
+                        title: form.title,
+                        tags: form.tags
+                          .split(",")
+                          .map((t) => t.trim())
+                          .filter(Boolean),
+                        lessonCount: BigInt(lessons.length),
+                        duration: BigInt(0),
+                        isPublished: v,
+                      });
+                      toast.success(
+                        v ? "Course published!" : "Course set to draft.",
+                      );
+                    } catch {
+                      toast.error("Failed to update publish status.");
+                    }
+                  } else {
+                    toast.success(
+                      v ? "Course published!" : "Course set to draft.",
+                    );
+                  }
                 }}
                 className={
                   form.published ? "data-[state=checked]:bg-emerald-500" : ""
@@ -800,14 +843,38 @@ export default function CourseEditPage() {
             <Button
               size="sm"
               className="h-8 text-xs gap-1.5"
-              onClick={() =>
-                toast.success("Changes saved!", {
-                  description: `"${form.title}" has been updated.`,
-                })
-              }
+              disabled={saving}
+              onClick={async () => {
+                if (!actor || courseId === "new") {
+                  toast.success("Changes saved!", {
+                    description: `"${form.title}" has been updated.`,
+                  });
+                  return;
+                }
+                setSaving(true);
+                try {
+                  await actor.updateCourse(BigInt(courseId), {
+                    title: form.title,
+                    tags: form.tags
+                      .split(",")
+                      .map((t) => t.trim())
+                      .filter(Boolean),
+                    lessonCount: BigInt(lessons.length),
+                    duration: BigInt(0),
+                    isPublished: form.published,
+                  });
+                  toast.success("Changes saved!", {
+                    description: `"${form.title}" has been updated.`,
+                  });
+                } catch {
+                  toast.error("Failed to save changes.");
+                } finally {
+                  setSaving(false);
+                }
+              }}
               data-ocid="course_edit.save_button"
             >
-              Save
+              {saving ? "Saving..." : "Save"}
             </Button>
           </div>
         </div>

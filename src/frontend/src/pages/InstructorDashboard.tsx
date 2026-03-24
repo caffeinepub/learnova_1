@@ -89,15 +89,12 @@ export default function InstructorDashboard() {
           </CardHeader>
           <CardContent>
             <Button
-              variant="outline"
-              className="w-full"
-              data-ocid="instructor.reports.secondary_button"
+              className="w-full gap-2"
+              onClick={() => navigate({ to: "/instructor/reporting" })}
+              data-ocid="instructor.reports.primary_button"
             >
-              View Reports
+              <BarChart3 className="h-4 w-4" /> View Reports
             </Button>
-            <p className="text-xs text-center text-muted-foreground pt-3">
-              Detailed reporting available in Step 3
-            </p>
           </CardContent>
         </Card>
       </div>
