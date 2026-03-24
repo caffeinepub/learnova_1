@@ -9,7 +9,7 @@ export function useGetUsers() {
     queryKey: ["users"],
     queryFn: async () => {
       if (!actor) return [];
-      return actor.getUsers();
+      return actor.getAllUsers();
     },
     enabled: !!actor && !isFetching,
   });
@@ -45,7 +45,7 @@ export function useRegisterProfile() {
   return useMutation({
     mutationFn: async (dto: { name: string; email: string }) => {
       if (!actor) throw new Error("Actor not available");
-      return actor.registerProfile(dto);
+      return actor.createProfile(dto);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["myProfile"] });

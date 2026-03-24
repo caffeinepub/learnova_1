@@ -12,12 +12,15 @@ import { AuthProvider } from "./contexts/AuthContext";
 
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminUsersPage from "./pages/AdminUsersPage";
+import CourseDetailPage from "./pages/CourseDetailPage";
 import CourseEditPage from "./pages/CourseEditPage";
 import CoursesDashboard from "./pages/CoursesDashboard";
 import DashboardPage from "./pages/DashboardPage";
 import HomePage from "./pages/HomePage";
 import InstructorDashboard from "./pages/InstructorDashboard";
+import LearnerCoursesPage from "./pages/LearnerCoursesPage";
 import LearnerDashboard from "./pages/LearnerDashboard";
+import LessonPlayerPage from "./pages/LessonPlayerPage";
 import LoginPage from "./pages/LoginPage";
 import ProfilePage from "./pages/ProfilePage";
 import UnauthorizedPage from "./pages/UnauthorizedPage";
@@ -114,6 +117,36 @@ const learnerRoute = createRoute({
   ),
 });
 
+const learnerCoursesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/learner/courses",
+  component: () => (
+    <ProtectedRoute allowedRoles={["admin", "learner"]}>
+      <LearnerCoursesPage />
+    </ProtectedRoute>
+  ),
+});
+
+const courseDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/learner/courses/$courseId",
+  component: () => (
+    <ProtectedRoute allowedRoles={["admin", "learner"]}>
+      <CourseDetailPage />
+    </ProtectedRoute>
+  ),
+});
+
+const lessonPlayerRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/learner/courses/$courseId/lessons/$lessonId",
+  component: () => (
+    <ProtectedRoute allowedRoles={["admin", "learner"]}>
+      <LessonPlayerPage />
+    </ProtectedRoute>
+  ),
+});
+
 const profileRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/profile",
@@ -135,6 +168,9 @@ const routeTree = rootRoute.addChildren([
   instructorCoursesRoute,
   courseEditRoute,
   learnerRoute,
+  learnerCoursesRoute,
+  courseDetailRoute,
+  lessonPlayerRoute,
   profileRoute,
 ]);
 

@@ -89,15 +89,62 @@ export class ExternalBlob {
         return this;
     }
 }
+export type Time = bigint;
+export interface UpdateCourseDto {
+    title: string;
+    duration: bigint;
+    isPublished: boolean;
+    tags: Array<string>;
+    lessonCount: bigint;
+}
 export type ProfileId = bigint;
+export interface Enrollment {
+    completedAt?: Time;
+    principal: Principal;
+    isCompleted: boolean;
+    enrolledAt: Time;
+    courseId: CourseId;
+}
+export interface Badge {
+    name: string;
+    awardedAt: Time;
+}
+export interface Course {
+    id: CourseId;
+    title: string;
+    duration: bigint;
+    isPublished: boolean;
+    views: bigint;
+    createdAt: Time;
+    tags: Array<string>;
+    instructorId: Principal;
+    lessonCount: bigint;
+}
+export interface QuizAttempt {
+    completedAt: Time;
+    score: bigint;
+    pointsEarned: bigint;
+    quizId: string;
+    courseId: CourseId;
+    attemptNumber: bigint;
+}
+export type CourseId = bigint;
+export interface CreateCourseDto {
+    title: string;
+}
 export interface CreateUserProfileDto {
     name: string;
     email: string;
 }
-export type Time = bigint;
 export interface UpdateUserProfileDto {
     name: string;
     email: string;
+}
+export interface LessonProgress {
+    lessonId: string;
+    completedAt?: Time;
+    isCompleted: boolean;
+    courseId: CourseId;
 }
 export interface UserProfile {
     id: ProfileId;
@@ -108,6 +155,13 @@ export interface UserProfile {
     email: string;
     avatarUrl: string;
 }
+export interface Review {
+    principal: Principal;
+    createdAt: Time;
+    comment: string;
+    rating: bigint;
+    courseId: CourseId;
+}
 export enum UserRole {
     admin = "admin",
     user = "user",
@@ -116,27 +170,39 @@ export enum UserRole {
 export interface backendInterface {
     _initializeAccessControlWithSecret(userSecret: string): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
+    awardBadge(principal: Principal, badgeName: string): Promise<void>;
+    completeCourse(courseId: CourseId): Promise<void>;
+    createCourse(dto: CreateCourseDto): Promise<Course>;
+    createProfile(createProfileDto: CreateUserProfileDto): Promise<UserProfile>;
     doesAdminExist(): Promise<boolean>;
+    enrollCourse(arg0: {
+        courseId: CourseId;
+    }): Promise<void>;
+    getAllUsers(): Promise<Array<UserProfile>>;
     getCallerUserRole(): Promise<UserRole>;
-    getMyProfile(): Promise<UserProfile | null>;
+    getCourseReviews(courseId: CourseId): Promise<Array<Review>>;
+    getCourses(): Promise<Array<Course>>;
+    getEnrollments(principal: Principal): Promise<Array<Enrollment>>;
+    getMyBadges(): Promise<Array<Badge>>;
+    getMyCourseCompletions(): Promise<Array<Enrollment>>;
+    getMyCourses(): Promise<Array<Course>>;
+    getMyLessonProgress(courseId: CourseId): Promise<Array<LessonProgress>>;
+    getMyPoints(): Promise<bigint>;
+    getMyQuizAttempts(courseId: CourseId, quizId: string): Promise<Array<QuizAttempt>>;
     getUserCount(): Promise<bigint>;
-    getUserProfile(user: Principal): Promise<UserProfile>;
-    /**
-     * / General Queries
-     */
-    getUsers(): Promise<Array<UserProfile>>;
+    getUserProfile(principal: Principal): Promise<UserProfile>;
+    incrementCourseViews(id: CourseId): Promise<void>;
     isAdmin(): Promise<boolean>;
     isCallerAdmin(): Promise<boolean>;
-    isInstructor(): Promise<boolean>;
-    /**
-     * / Profile-Specific Queries
-     */
-    registerProfile(createProfileDto: CreateUserProfileDto): Promise<UserProfile>;
+    markLessonComplete(courseId: CourseId, lessonId: string): Promise<void>;
     seedFirstAdmin(): Promise<void>;
     setUserRole(user: Principal, role: UserRole): Promise<void>;
+    submitQuizAttempt(courseId: CourseId, quizId: string, score: bigint, pointsEarned: bigint): Promise<void>;
+    submitReview(courseId: CourseId, rating: bigint, comment: string): Promise<void>;
+    updateCourse(id: CourseId, dto: UpdateCourseDto): Promise<Course>;
     updateMyProfile(updateProfileDto: UpdateUserProfileDto): Promise<void>;
 }
-import type { ProfileId as _ProfileId, Time as _Time, UserProfile as _UserProfile, UserRole as _UserRole } from "./declarations/backend.did.d.ts";
+import type { CourseId as _CourseId, Enrollment as _Enrollment, LessonProgress as _LessonProgress, ProfileId as _ProfileId, Time as _Time, UserProfile as _UserProfile, UserRole as _UserRole } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
     async _initializeAccessControlWithSecret(arg0: string): Promise<void> {
@@ -167,6 +233,62 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async awardBadge(arg0: Principal, arg1: string): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.awardBadge(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.awardBadge(arg0, arg1);
+            return result;
+        }
+    }
+    async completeCourse(arg0: CourseId): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.completeCourse(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.completeCourse(arg0);
+            return result;
+        }
+    }
+    async createCourse(arg0: CreateCourseDto): Promise<Course> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.createCourse(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.createCourse(arg0);
+            return result;
+        }
+    }
+    async createProfile(arg0: CreateUserProfileDto): Promise<UserProfile> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.createProfile(arg0);
+                return from_candid_UserProfile_n3(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.createProfile(arg0);
+            return from_candid_UserProfile_n3(this._uploadFile, this._downloadFile, result);
+        }
+    }
     async doesAdminExist(): Promise<boolean> {
         if (this.processError) {
             try {
@@ -181,32 +303,174 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async enrollCourse(arg0: {
+        courseId: CourseId;
+    }): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.enrollCourse(arg0);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.enrollCourse(arg0);
+            return result;
+        }
+    }
+    async getAllUsers(): Promise<Array<UserProfile>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getAllUsers();
+                return from_candid_vec_n7(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getAllUsers();
+            return from_candid_vec_n7(this._uploadFile, this._downloadFile, result);
+        }
+    }
     async getCallerUserRole(): Promise<UserRole> {
         if (this.processError) {
             try {
                 const result = await this.actor.getCallerUserRole();
-                return from_candid_UserRole_n3(this._uploadFile, this._downloadFile, result);
+                return from_candid_UserRole_n5(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
             const result = await this.actor.getCallerUserRole();
-            return from_candid_UserRole_n3(this._uploadFile, this._downloadFile, result);
+            return from_candid_UserRole_n5(this._uploadFile, this._downloadFile, result);
         }
     }
-    async getMyProfile(): Promise<UserProfile | null> {
+    async getCourseReviews(arg0: CourseId): Promise<Array<Review>> {
         if (this.processError) {
             try {
-                const result = await this.actor.getMyProfile();
-                return from_candid_opt_n5(this._uploadFile, this._downloadFile, result);
+                const result = await this.actor.getCourseReviews(arg0);
+                return result;
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.getMyProfile();
-            return from_candid_opt_n5(this._uploadFile, this._downloadFile, result);
+            const result = await this.actor.getCourseReviews(arg0);
+            return result;
+        }
+    }
+    async getCourses(): Promise<Array<Course>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getCourses();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getCourses();
+            return result;
+        }
+    }
+    async getEnrollments(arg0: Principal): Promise<Array<Enrollment>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getEnrollments(arg0);
+                return from_candid_vec_n8(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getEnrollments(arg0);
+            return from_candid_vec_n8(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async getMyBadges(): Promise<Array<Badge>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getMyBadges();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getMyBadges();
+            return result;
+        }
+    }
+    async getMyCourseCompletions(): Promise<Array<Enrollment>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getMyCourseCompletions();
+                return from_candid_vec_n8(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getMyCourseCompletions();
+            return from_candid_vec_n8(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async getMyCourses(): Promise<Array<Course>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getMyCourses();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getMyCourses();
+            return result;
+        }
+    }
+    async getMyLessonProgress(arg0: CourseId): Promise<Array<LessonProgress>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getMyLessonProgress(arg0);
+                return from_candid_vec_n12(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getMyLessonProgress(arg0);
+            return from_candid_vec_n12(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async getMyPoints(): Promise<bigint> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getMyPoints();
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getMyPoints();
+            return result;
+        }
+    }
+    async getMyQuizAttempts(arg0: CourseId, arg1: string): Promise<Array<QuizAttempt>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getMyQuizAttempts(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getMyQuizAttempts(arg0, arg1);
+            return result;
         }
     }
     async getUserCount(): Promise<bigint> {
@@ -227,28 +491,28 @@ export class Backend implements backendInterface {
         if (this.processError) {
             try {
                 const result = await this.actor.getUserProfile(arg0);
-                return from_candid_UserProfile_n6(this._uploadFile, this._downloadFile, result);
+                return from_candid_UserProfile_n3(this._uploadFile, this._downloadFile, result);
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
             const result = await this.actor.getUserProfile(arg0);
-            return from_candid_UserProfile_n6(this._uploadFile, this._downloadFile, result);
+            return from_candid_UserProfile_n3(this._uploadFile, this._downloadFile, result);
         }
     }
-    async getUsers(): Promise<Array<UserProfile>> {
+    async incrementCourseViews(arg0: CourseId): Promise<void> {
         if (this.processError) {
             try {
-                const result = await this.actor.getUsers();
-                return from_candid_vec_n8(this._uploadFile, this._downloadFile, result);
+                const result = await this.actor.incrementCourseViews(arg0);
+                return result;
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.getUsers();
-            return from_candid_vec_n8(this._uploadFile, this._downloadFile, result);
+            const result = await this.actor.incrementCourseViews(arg0);
+            return result;
         }
     }
     async isAdmin(): Promise<boolean> {
@@ -279,32 +543,18 @@ export class Backend implements backendInterface {
             return result;
         }
     }
-    async isInstructor(): Promise<boolean> {
+    async markLessonComplete(arg0: CourseId, arg1: string): Promise<void> {
         if (this.processError) {
             try {
-                const result = await this.actor.isInstructor();
+                const result = await this.actor.markLessonComplete(arg0, arg1);
                 return result;
             } catch (e) {
                 this.processError(e);
                 throw new Error("unreachable");
             }
         } else {
-            const result = await this.actor.isInstructor();
+            const result = await this.actor.markLessonComplete(arg0, arg1);
             return result;
-        }
-    }
-    async registerProfile(arg0: CreateUserProfileDto): Promise<UserProfile> {
-        if (this.processError) {
-            try {
-                const result = await this.actor.registerProfile(arg0);
-                return from_candid_UserProfile_n6(this._uploadFile, this._downloadFile, result);
-            } catch (e) {
-                this.processError(e);
-                throw new Error("unreachable");
-            }
-        } else {
-            const result = await this.actor.registerProfile(arg0);
-            return from_candid_UserProfile_n6(this._uploadFile, this._downloadFile, result);
         }
     }
     async seedFirstAdmin(): Promise<void> {
@@ -335,6 +585,48 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async submitQuizAttempt(arg0: CourseId, arg1: string, arg2: bigint, arg3: bigint): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.submitQuizAttempt(arg0, arg1, arg2, arg3);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.submitQuizAttempt(arg0, arg1, arg2, arg3);
+            return result;
+        }
+    }
+    async submitReview(arg0: CourseId, arg1: bigint, arg2: string): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.submitReview(arg0, arg1, arg2);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.submitReview(arg0, arg1, arg2);
+            return result;
+        }
+    }
+    async updateCourse(arg0: CourseId, arg1: UpdateCourseDto): Promise<Course> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.updateCourse(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.updateCourse(arg0, arg1);
+            return result;
+        }
+    }
     async updateMyProfile(arg0: UpdateUserProfileDto): Promise<void> {
         if (this.processError) {
             try {
@@ -350,16 +642,61 @@ export class Backend implements backendInterface {
         }
     }
 }
-function from_candid_UserProfile_n6(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _UserProfile): UserProfile {
-    return from_candid_record_n7(_uploadFile, _downloadFile, value);
+function from_candid_Enrollment_n9(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Enrollment): Enrollment {
+    return from_candid_record_n10(_uploadFile, _downloadFile, value);
 }
-function from_candid_UserRole_n3(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _UserRole): UserRole {
-    return from_candid_variant_n4(_uploadFile, _downloadFile, value);
+function from_candid_LessonProgress_n13(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _LessonProgress): LessonProgress {
+    return from_candid_record_n14(_uploadFile, _downloadFile, value);
 }
-function from_candid_opt_n5(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_UserProfile]): UserProfile | null {
-    return value.length === 0 ? null : from_candid_UserProfile_n6(_uploadFile, _downloadFile, value[0]);
+function from_candid_UserProfile_n3(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _UserProfile): UserProfile {
+    return from_candid_record_n4(_uploadFile, _downloadFile, value);
 }
-function from_candid_record_n7(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+function from_candid_UserRole_n5(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _UserRole): UserRole {
+    return from_candid_variant_n6(_uploadFile, _downloadFile, value);
+}
+function from_candid_opt_n11(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: [] | [_Time]): Time | null {
+    return value.length === 0 ? null : value[0];
+}
+function from_candid_record_n10(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+    completedAt: [] | [_Time];
+    principal: Principal;
+    isCompleted: boolean;
+    enrolledAt: _Time;
+    courseId: _CourseId;
+}): {
+    completedAt?: Time;
+    principal: Principal;
+    isCompleted: boolean;
+    enrolledAt: Time;
+    courseId: CourseId;
+} {
+    return {
+        completedAt: record_opt_to_undefined(from_candid_opt_n11(_uploadFile, _downloadFile, value.completedAt)),
+        principal: value.principal,
+        isCompleted: value.isCompleted,
+        enrolledAt: value.enrolledAt,
+        courseId: value.courseId
+    };
+}
+function from_candid_record_n14(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+    lessonId: string;
+    completedAt: [] | [_Time];
+    isCompleted: boolean;
+    courseId: _CourseId;
+}): {
+    lessonId: string;
+    completedAt?: Time;
+    isCompleted: boolean;
+    courseId: CourseId;
+} {
+    return {
+        lessonId: value.lessonId,
+        completedAt: record_opt_to_undefined(from_candid_opt_n11(_uploadFile, _downloadFile, value.completedAt)),
+        isCompleted: value.isCompleted,
+        courseId: value.courseId
+    };
+}
+function from_candid_record_n4(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     id: _ProfileId;
     principal: Principal;
     name: string;
@@ -381,12 +718,12 @@ function from_candid_record_n7(_uploadFile: (file: ExternalBlob) => Promise<Uint
         principal: value.principal,
         name: value.name,
         createdAt: value.createdAt,
-        role: from_candid_UserRole_n3(_uploadFile, _downloadFile, value.role),
+        role: from_candid_UserRole_n5(_uploadFile, _downloadFile, value.role),
         email: value.email,
         avatarUrl: value.avatarUrl
     };
 }
-function from_candid_variant_n4(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+function from_candid_variant_n6(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     admin: null;
 } | {
     user: null;
@@ -395,8 +732,14 @@ function from_candid_variant_n4(_uploadFile: (file: ExternalBlob) => Promise<Uin
 }): UserRole {
     return "admin" in value ? UserRole.admin : "user" in value ? UserRole.user : "guest" in value ? UserRole.guest : value;
 }
-function from_candid_vec_n8(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_UserProfile>): Array<UserProfile> {
-    return value.map((x)=>from_candid_UserProfile_n6(_uploadFile, _downloadFile, x));
+function from_candid_vec_n12(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_LessonProgress>): Array<LessonProgress> {
+    return value.map((x)=>from_candid_LessonProgress_n13(_uploadFile, _downloadFile, x));
+}
+function from_candid_vec_n7(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_UserProfile>): Array<UserProfile> {
+    return value.map((x)=>from_candid_UserProfile_n3(_uploadFile, _downloadFile, x));
+}
+function from_candid_vec_n8(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_Enrollment>): Array<Enrollment> {
+    return value.map((x)=>from_candid_Enrollment_n9(_uploadFile, _downloadFile, x));
 }
 function to_candid_UserRole_n1(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: UserRole): _UserRole {
     return to_candid_variant_n2(_uploadFile, _downloadFile, value);

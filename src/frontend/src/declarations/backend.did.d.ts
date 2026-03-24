@@ -10,9 +10,58 @@ import type { ActorMethod } from '@icp-sdk/core/agent';
 import type { IDL } from '@icp-sdk/core/candid';
 import type { Principal } from '@icp-sdk/core/principal';
 
+export interface Badge { 'name' : string, 'awardedAt' : Time }
+export interface Course {
+  'id' : CourseId,
+  'title' : string,
+  'duration' : bigint,
+  'isPublished' : boolean,
+  'views' : bigint,
+  'createdAt' : Time,
+  'tags' : Array<string>,
+  'instructorId' : Principal,
+  'lessonCount' : bigint,
+}
+export type CourseId = bigint;
+export interface CreateCourseDto { 'title' : string }
 export interface CreateUserProfileDto { 'name' : string, 'email' : string }
+export interface Enrollment {
+  'completedAt' : [] | [Time],
+  'principal' : Principal,
+  'isCompleted' : boolean,
+  'enrolledAt' : Time,
+  'courseId' : CourseId,
+}
+export interface LessonProgress {
+  'lessonId' : string,
+  'completedAt' : [] | [Time],
+  'isCompleted' : boolean,
+  'courseId' : CourseId,
+}
 export type ProfileId = bigint;
+export interface QuizAttempt {
+  'completedAt' : Time,
+  'score' : bigint,
+  'pointsEarned' : bigint,
+  'quizId' : string,
+  'courseId' : CourseId,
+  'attemptNumber' : bigint,
+}
+export interface Review {
+  'principal' : Principal,
+  'createdAt' : Time,
+  'comment' : string,
+  'rating' : bigint,
+  'courseId' : CourseId,
+}
 export type Time = bigint;
+export interface UpdateCourseDto {
+  'title' : string,
+  'duration' : bigint,
+  'isPublished' : boolean,
+  'tags' : Array<string>,
+  'lessonCount' : bigint,
+}
 export interface UpdateUserProfileDto { 'name' : string, 'email' : string }
 export interface UserProfile {
   'id' : ProfileId,
@@ -29,24 +78,37 @@ export type UserRole = { 'admin' : null } |
 export interface _SERVICE {
   '_initializeAccessControlWithSecret' : ActorMethod<[string], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
+  'awardBadge' : ActorMethod<[Principal, string], undefined>,
+  'completeCourse' : ActorMethod<[CourseId], undefined>,
+  'createCourse' : ActorMethod<[CreateCourseDto], Course>,
+  'createProfile' : ActorMethod<[CreateUserProfileDto], UserProfile>,
   'doesAdminExist' : ActorMethod<[], boolean>,
+  'enrollCourse' : ActorMethod<[{ 'courseId' : CourseId }], undefined>,
+  'getAllUsers' : ActorMethod<[], Array<UserProfile>>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
-  'getMyProfile' : ActorMethod<[], [] | [UserProfile]>,
+  'getCourseReviews' : ActorMethod<[CourseId], Array<Review>>,
+  'getCourses' : ActorMethod<[], Array<Course>>,
+  'getEnrollments' : ActorMethod<[Principal], Array<Enrollment>>,
+  'getMyBadges' : ActorMethod<[], Array<Badge>>,
+  'getMyCourseCompletions' : ActorMethod<[], Array<Enrollment>>,
+  'getMyCourses' : ActorMethod<[], Array<Course>>,
+  'getMyLessonProgress' : ActorMethod<[CourseId], Array<LessonProgress>>,
+  'getMyPoints' : ActorMethod<[], bigint>,
+  'getMyQuizAttempts' : ActorMethod<[CourseId, string], Array<QuizAttempt>>,
   'getUserCount' : ActorMethod<[], bigint>,
   'getUserProfile' : ActorMethod<[Principal], UserProfile>,
-  /**
-   * / General Queries
-   */
-  'getUsers' : ActorMethod<[], Array<UserProfile>>,
+  'incrementCourseViews' : ActorMethod<[CourseId], undefined>,
   'isAdmin' : ActorMethod<[], boolean>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
-  'isInstructor' : ActorMethod<[], boolean>,
-  /**
-   * / Profile-Specific Queries
-   */
-  'registerProfile' : ActorMethod<[CreateUserProfileDto], UserProfile>,
+  'markLessonComplete' : ActorMethod<[CourseId, string], undefined>,
   'seedFirstAdmin' : ActorMethod<[], undefined>,
   'setUserRole' : ActorMethod<[Principal, UserRole], undefined>,
+  'submitQuizAttempt' : ActorMethod<
+    [CourseId, string, bigint, bigint],
+    undefined
+  >,
+  'submitReview' : ActorMethod<[CourseId, bigint, string], undefined>,
+  'updateCourse' : ActorMethod<[CourseId, UpdateCourseDto], Course>,
   'updateMyProfile' : ActorMethod<[UpdateUserProfileDto], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;

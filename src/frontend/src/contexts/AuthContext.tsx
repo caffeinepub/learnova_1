@@ -51,7 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     queryKey: ["myProfile"],
     queryFn: async () => {
       if (!actor) throw new Error("Actor not available");
-      return actor.getMyProfile();
+      return actor.getUserProfile(identity!.getPrincipal());
     },
     enabled: !!actor && !actorFetching && isAuthenticated,
     retry: false,
