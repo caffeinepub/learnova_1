@@ -246,9 +246,12 @@ export default function ReportingDashboardPage() {
     enabled,
   });
 
+  // Show all courses (no per-user instructor filtering with anonymous actor)
+  const filteredCourses = useMemo(() => courses, [courses]);
+
   const allRows = useMemo(
-    () => buildRowsFromReports(reportingData, courses, users),
-    [reportingData, courses, users],
+    () => buildRowsFromReports(reportingData, filteredCourses, users),
+    [reportingData, filteredCourses, users],
   );
 
   const counts = {
@@ -262,7 +265,7 @@ export default function ReportingDashboardPage() {
     const matchesFilter = activeFilter === "all" || row.status === activeFilter;
     const matchesCourse =
       selectedCourse === "all" ||
-      courses.some(
+      filteredCourses.some(
         (c) => String(c.id) === selectedCourse && c.title === row.courseName,
       );
     const q = search.toLowerCase();
@@ -287,7 +290,6 @@ export default function ReportingDashboardPage() {
       : "bg-blue-100 text-blue-700 border-blue-200";
 
   const visibleCols = ALL_COLUMNS.filter((c) => visibleColumns[c.key]);
-
   const isLoading = reportingLoading;
 
   return (
@@ -357,9 +359,7 @@ export default function ReportingDashboardPage() {
                       )}
                     </div>
                     <div
-                      className={`text-3xl font-bold mb-0.5 ${
-                        isActive ? card.textClass : "text-foreground"
-                      }`}
+                      className={`text-3xl font-bold mb-0.5 ${isActive ? card.textClass : "text-foreground"}`}
                     >
                       {isLoading ? "—" : counts[card.key]}
                     </div>
@@ -394,7 +394,7 @@ export default function ReportingDashboardPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Courses</SelectItem>
-              {courses.map((c) => (
+              {filteredCourses.map((c) => (
                 <SelectItem key={String(c.id)} value={String(c.id)}>
                   {c.title}
                 </SelectItem>
@@ -412,7 +412,6 @@ export default function ReportingDashboardPage() {
           </Button>
         </div>
 
-        {/* Active filter indicator */}
         {activeFilter !== "all" && (
           <div className="flex items-center gap-2 mb-4">
             <span className="text-sm text-muted-foreground">Showing:</span>
@@ -441,11 +440,7 @@ export default function ReportingDashboardPage() {
                     {visibleCols.map((col) => (
                       <TableHead
                         key={col.key}
-                        className={`whitespace-nowrap ${
-                          col.key === "srNo" ? "w-16 pl-5" : ""
-                        } ${
-                          col.key === "completionPct" ? "min-w-[140px]" : ""
-                        }`}
+                        className={`whitespace-nowrap ${col.key === "srNo" ? "w-16 pl-5" : ""} ${col.key === "completionPct" ? "min-w-[140px]" : ""}`}
                       >
                         {col.label}
                       </TableHead>
@@ -472,11 +467,7 @@ export default function ReportingDashboardPage() {
                       >
                         <div className="flex flex-col items-center gap-2 text-muted-foreground">
                           <Users className="h-8 w-8 opacity-30" />
-                          <span className="text-sm">
-                            {allRows.length === 0
-                              ? "No participants yet."
-                              : "No participants yet."}
-                          </span>
+                          <span className="text-sm">No participants yet.</span>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -552,9 +543,7 @@ export default function ReportingDashboardPage() {
                         {visibleColumns.status && (
                           <TableCell>
                             <Badge
-                              className={`text-xs whitespace-nowrap ${
-                                STATUS_BADGE_CLASS[row.status]
-                              }`}
+                              className={`text-xs whitespace-nowrap ${STATUS_BADGE_CLASS[row.status]}`}
                             >
                               {STATUS_LABEL[row.status]}
                             </Badge>
@@ -569,25 +558,11 @@ export default function ReportingDashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Row count */}
         {filtered.length > 0 && (
           <p className="text-xs text-muted-foreground mt-2 text-right">
             Showing {filtered.length} of {allRows.length} records
           </p>
         )}
-
-        {/* Footer */}
-        <footer className="mt-10 text-center text-xs text-muted-foreground">
-          © {new Date().getFullYear()}. Built with love using{" "}
-          <a
-            href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(window.location.hostname)}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline hover:text-foreground transition-colors"
-          >
-            caffeine.ai
-          </a>
-        </footer>
       </div>
 
       {/* Column Visibility Side Panel */}
@@ -629,7 +604,6 @@ export default function ReportingDashboardPage() {
                   <X className="h-4 w-4" />
                 </Button>
               </div>
-
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
                 {ALL_COLUMNS.map((col) => (
                   <div key={col.key} className="flex items-center gap-3">
@@ -648,7 +622,6 @@ export default function ReportingDashboardPage() {
                   </div>
                 ))}
               </div>
-
               <div className="px-5 py-4 border-t border-border">
                 <Button
                   variant="outline"

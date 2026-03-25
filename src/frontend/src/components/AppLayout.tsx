@@ -21,7 +21,6 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useAuthContext } from "../contexts/AuthContext";
-import RegisterModal from "./RegisterModal";
 
 interface NavLink {
   label: string;
@@ -43,8 +42,16 @@ function getNavLinks(role: string): NavLink[] {
           to: "/admin/users",
           icon: <Users className="h-4 w-4" />,
         },
-        { label: "Courses", to: "/", icon: <BookOpen className="h-4 w-4" /> },
-        { label: "Reports", to: "/", icon: <BarChart3 className="h-4 w-4" /> },
+        {
+          label: "Courses",
+          to: "/instructor/courses",
+          icon: <BookOpen className="h-4 w-4" />,
+        },
+        {
+          label: "Reporting",
+          to: "/instructor/reporting",
+          icon: <BarChart3 className="h-4 w-4" />,
+        },
       ];
     case "instructor":
       return [
@@ -54,11 +61,15 @@ function getNavLinks(role: string): NavLink[] {
           icon: <LayoutDashboard className="h-4 w-4" />,
         },
         {
-          label: "My Courses",
-          to: "/",
+          label: "Courses",
+          to: "/instructor/courses",
           icon: <BookOpen className="h-4 w-4" />,
         },
-        { label: "Reports", to: "/", icon: <BarChart3 className="h-4 w-4" /> },
+        {
+          label: "Reporting",
+          to: "/instructor/reporting",
+          icon: <BarChart3 className="h-4 w-4" />,
+        },
       ];
     case "learner":
       return [
@@ -81,15 +92,7 @@ function getNavLinks(role: string): NavLink[] {
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const {
-    profile,
-    role,
-    isAuthenticated,
-    showRegisterModal,
-    setShowRegisterModal,
-    refetchProfile,
-    logout,
-  } = useAuthContext();
+  const { profile, role, isAuthenticated, logout } = useAuthContext();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const navLinks = getNavLinks(role);
@@ -103,8 +106,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         .slice(0, 2)
     : "?";
 
-  const handleLogout = async () => {
-    await logout();
+  const handleLogout = () => {
+    logout();
     navigate({ to: "/" });
   };
 
@@ -237,14 +240,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           caffeine.ai
         </a>
       </footer>
-
-      <RegisterModal
-        open={showRegisterModal}
-        onSuccess={() => {
-          setShowRegisterModal(false);
-          refetchProfile();
-        }}
-      />
     </div>
   );
 }

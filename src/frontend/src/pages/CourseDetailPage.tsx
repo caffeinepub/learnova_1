@@ -158,6 +158,7 @@ export default function CourseDetailPage() {
     queryKey: ["lessonProgress", courseId],
     queryFn: async () => (actor ? actor.getMyLessonProgress(courseIdBig) : []),
     enabled,
+    staleTime: 0,
   });
 
   const { data: completions } = useQuery<Enrollment[]>({
@@ -211,12 +212,13 @@ export default function CourseDetailPage() {
   const completedIds = new Set(
     (lessonProgress ?? []).filter((p) => p.isCompleted).map((p) => p.lessonId),
   );
+  const totalLessonCount = Number(course?.lessonCount ?? lessons.length);
   const progressPct =
-    lessons.length > 0
-      ? Math.round((completedIds.size / lessons.length) * 100)
+    totalLessonCount > 0
+      ? Math.round((completedIds.size / totalLessonCount) * 100)
       : 0;
   const allComplete =
-    lessons.length > 0 && completedIds.size === lessons.length;
+    completedIds.size >= totalLessonCount && totalLessonCount > 0;
 
   const alreadyReviewed = (reviews ?? []).some(
     (r) => r.principal?.toString() === profile?.principal?.toString(),
@@ -400,7 +402,7 @@ export default function CourseDetailPage() {
                 <div className="flex gap-2 flex-wrap">
                   <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-muted text-muted-foreground px-3 py-1.5 rounded-full border border-border">
                     <BookOpen className="h-3 w-3" />
-                    Total: {lessons.length}
+                    Total: {totalLessonCount}
                   </span>
                   <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full border border-emerald-200">
                     <CheckCircle2 className="h-3 w-3" />
@@ -408,7 +410,7 @@ export default function CourseDetailPage() {
                   </span>
                   <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-rose-50 text-rose-700 px-3 py-1.5 rounded-full border border-rose-200">
                     <Clock className="h-3 w-3" />
-                    Incomplete: {lessons.length - completedIds.size}
+                    Incomplete: {totalLessonCount - completedIds.size}
                   </span>
                 </div>
               </motion.div>

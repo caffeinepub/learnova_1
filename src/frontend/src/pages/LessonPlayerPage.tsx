@@ -425,11 +425,18 @@ export default function LessonPlayerPage() {
   const [earnedPoints, setEarnedPoints] = useState(0);
   const [totalPoints, setTotalPoints] = useState(0);
 
+  const { data: courses } = useQuery<any[]>({
+    queryKey: ["courses"],
+    queryFn: async () => (actor ? actor.getCourses() : []),
+    enabled,
+  });
+
   const { data: lessonProgress } = useQuery<LessonProgress[]>({
     queryKey: ["lessonProgress", courseId],
     queryFn: async () =>
       actor ? actor.getMyLessonProgress(BigInt(courseId)) : [],
     enabled,
+    staleTime: 0,
   });
 
   const lessons: LessonData[] = (() => {
@@ -453,10 +460,14 @@ export default function LessonPlayerPage() {
   );
   const isComplete = completedIds.has(lessonId);
   const completedCount = completedIds.size;
+  const currentCourse = (courses ?? []).find(
+    (c: any) => c.id.toString() === courseId,
+  );
+  const totalLessons = currentCourse
+    ? Number(currentCourse.lessonCount)
+    : lessons.length;
   const progressPct =
-    lessons.length > 0
-      ? Math.round((completedCount / lessons.length) * 100)
-      : 0;
+    totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0;
 
   const handleMarkComplete = async () => {
     if (!actor || isComplete) return;
@@ -464,6 +475,7 @@ export default function LessonPlayerPage() {
     try {
       await actor.markLessonComplete(BigInt(courseId), lessonId);
       qc.invalidateQueries({ queryKey: ["lessonProgress", courseId] });
+      qc.invalidateQueries({ queryKey: ["courses"] });
       toast.success("Lesson marked as complete!");
     } catch {
       toast.error("Failed to mark lesson as complete");

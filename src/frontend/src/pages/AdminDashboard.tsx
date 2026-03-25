@@ -146,8 +146,14 @@ export default function AdminDashboard() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button variant="outline" className="w-full">
-              Coming in Step 2
+            <Button
+              asChild
+              className="w-full"
+              data-ocid="admin.manage_courses.primary_button"
+            >
+              <Link to="/instructor/courses">
+                Manage Courses <ArrowRight className="h-4 w-4 ml-2" />
+              </Link>
             </Button>
           </CardContent>
         </Card>
@@ -163,8 +169,14 @@ export default function AdminDashboard() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button variant="outline" className="w-full">
-              Coming in Step 3
+            <Button
+              asChild
+              className="w-full"
+              data-ocid="admin.reports.primary_button"
+            >
+              <Link to="/instructor/reporting">
+                View Reports <ArrowRight className="h-4 w-4 ml-2" />
+              </Link>
             </Button>
           </CardContent>
         </Card>

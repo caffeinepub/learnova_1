@@ -1,15 +1,7 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type React from "react";
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-} from "react";
-import { type UserProfile, UserRole } from "../backend.d";
-import { useActor } from "../hooks/useActor";
-import { useInternetIdentity } from "../hooks/useInternetIdentity";
+import { createContext, useContext } from "react";
+import type { UserProfile } from "../backend.d";
+import { useLocalAuth } from "../hooks/useLocalAuth";
 
 export type AppRole = "admin" | "instructor" | "learner" | "guest";
 
@@ -26,62 +18,35 @@ interface AuthContextValue {
   setShowRegisterModal: (v: boolean) => void;
   refetchProfile: () => void;
   logout: () => void;
+  updateLocalUser: (updates: { name?: string; email?: string }) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function deriveAppRole(profile: UserProfile | null): AppRole {
-  if (!profile) return "guest";
-  if (profile.role === UserRole.admin) return "admin";
-  if (profile.role === UserRole.user) {
-    const savedRole = localStorage.getItem(
-      `learnova_role_${profile.principal.toString()}`,
-    );
-    if (savedRole === "instructor") return "instructor";
-    return "learner";
-  }
-  return "guest";
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { identity, clear } = useInternetIdentity();
-  const { actor, isFetching: actorFetching } = useActor();
-  const queryClient = useQueryClient();
-  const isAuthenticated = !!identity;
-  const [showRegisterModal, setShowRegisterModal] = useState(false);
+  const { currentUser, isInitialized, logout, updateUser } = useLocalAuth();
 
-  const profileQuery = useQuery<UserProfile | null>({
-    queryKey: ["myProfile"],
-    queryFn: async () => {
-      if (!actor) throw new Error("Actor not available");
-      return actor.getUserProfile(identity!.getPrincipal());
-    },
-    enabled: !!actor && !actorFetching && isAuthenticated,
-    retry: false,
-  });
+  const isAuthenticated = !!currentUser;
 
-  const isLoading =
-    actorFetching || (isAuthenticated && profileQuery.isLoading);
-  const isFetched = !!actor && profileQuery.isFetched;
-  const profile = profileQuery.data ?? null;
-  const role = deriveAppRole(profile);
+  const profile: UserProfile | null = currentUser
+    ? {
+        id: BigInt(0),
+        principal: { toString: () => currentUser.id } as never,
+        name: currentUser.name,
+        email: currentUser.email,
+        createdAt: BigInt(Date.now()) * BigInt(1_000_000),
+        role: "user" as never,
+        avatarUrl: "",
+      }
+    : null;
 
-  useEffect(() => {
-    if (isAuthenticated && isFetched && profile === null) {
-      setShowRegisterModal(true);
-    } else {
-      setShowRegisterModal(false);
-    }
-  }, [isAuthenticated, isFetched, profile]);
-
-  const refetchProfile = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["myProfile"] });
-  }, [queryClient]);
-
-  const logout = useCallback(async () => {
-    await clear();
-    queryClient.clear();
-  }, [clear, queryClient]);
+  const role: AppRole = currentUser
+    ? currentUser.role === "admin"
+      ? "admin"
+      : currentUser.role === "instructor"
+        ? "instructor"
+        : "learner"
+    : "guest";
 
   return (
     <AuthContext.Provider
@@ -92,12 +57,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isInstructor: role === "instructor",
         isLearner: role === "learner",
         isAuthenticated,
-        isLoading,
-        isFetched,
-        showRegisterModal,
-        setShowRegisterModal,
-        refetchProfile,
+        isLoading: !isInitialized,
+        isFetched: isInitialized,
+        showRegisterModal: false,
+        setShowRegisterModal: () => {},
+        refetchProfile: () => {},
         logout,
+        updateLocalUser: updateUser,
       }}
     >
       {children}

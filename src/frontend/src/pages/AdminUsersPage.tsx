@@ -1,3 +1,14 @@
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,10 +31,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { Principal } from "@dfinity/principal";
-import { Search, ShieldCheck, Users } from "lucide-react";
+import {
+  AlertTriangle,
+  Search,
+  ShieldCheck,
+  Trash2,
+  Users,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { type UserProfile, UserRole } from "../backend.d";
+import { useActor } from "../hooks/useActor";
 import { useGetUsers, useSetUserRole } from "../hooks/useQueries";
 
 type DisplayRole = "admin" | "instructor" | "learner";
@@ -48,7 +66,9 @@ function RoleBadge({ role }: { role: DisplayRole }) {
 export default function AdminUsersPage() {
   const { data: users, isLoading } = useGetUsers();
   const setRole = useSetUserRole();
+  const { actor } = useActor();
   const [search, setSearch] = useState("");
+  const [resetting, setResetting] = useState(false);
 
   const filtered = (users ?? []).filter(
     (u) =>
@@ -72,6 +92,27 @@ export default function AdminUsersPage() {
     }
   };
 
+  const handleResetDatabase = async () => {
+    if (!actor) {
+      toast.error("Not connected to backend.");
+      return;
+    }
+    setResetting(true);
+    try {
+      await (actor as any).resetDatabase();
+      localStorage.clear();
+      sessionStorage.clear();
+      toast.success("Database reset successfully. Redirecting...");
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 1000);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to reset database. Please try again.");
+      setResetting(false);
+    }
+  };
+
   const formatDate = (ts: bigint) => {
     return new Date(Number(ts) / 1_000_000).toLocaleDateString("en-US", {
       year: "numeric",
@@ -85,7 +126,6 @@ export default function AdminUsersPage() {
       className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10"
       data-ocid="admin_users.page"
     >
-      {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -229,6 +269,73 @@ export default function AdminUsersPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Danger Zone */}
+      <div className="mt-10" data-ocid="admin_users.panel">
+        <div className="flex items-center gap-2 mb-3">
+          <AlertTriangle className="h-4 w-4 text-destructive" />
+          <h2 className="text-sm font-semibold text-destructive uppercase tracking-wide">
+            Danger Zone
+          </h2>
+        </div>
+        <Card className="border-destructive/40 bg-destructive/5">
+          <CardContent className="p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <p className="font-semibold text-foreground">Reset Database</p>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Permanently delete all users, courses, enrollments, progress,
+                  reviews, and points. This cannot be undone.
+                </p>
+              </div>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="destructive"
+                    className="shrink-0 gap-2"
+                    disabled={resetting}
+                    data-ocid="admin_users.delete_button"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    {resetting ? "Resetting..." : "Reset Database"}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent data-ocid="admin_users.dialog">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+                      <AlertTriangle className="h-5 w-5" />
+                      Are you absolutely sure?
+                    </AlertDialogTitle>
+                    <AlertDialogDescription className="text-base">
+                      This will permanently delete{" "}
+                      <span className="font-semibold text-foreground">
+                        all users, courses, enrollments, and progress data
+                      </span>
+                      . You will be logged out immediately and this action{" "}
+                      <span className="font-semibold text-destructive">
+                        cannot be undone
+                      </span>
+                      .
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel data-ocid="admin_users.cancel_button">
+                      Cancel
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleResetDatabase}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      data-ocid="admin_users.confirm_button"
+                    >
+                      Reset Database
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

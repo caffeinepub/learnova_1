@@ -1,11 +1,13 @@
 import { Toaster } from "@/components/ui/sonner";
 import {
+  Link,
   Outlet,
   RouterProvider,
   createRootRoute,
   createRoute,
   createRouter,
 } from "@tanstack/react-router";
+import { GraduationCap, Home } from "lucide-react";
 import AppLayout from "./components/AppLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -29,6 +31,29 @@ import ReportingDashboardPage from "./pages/ReportingDashboardPage";
 import SignupPage from "./pages/SignupPage";
 import UnauthorizedPage from "./pages/UnauthorizedPage";
 
+function NotFoundPage() {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background px-6 text-center">
+      <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-6">
+        <GraduationCap className="h-8 w-8 text-primary" />
+      </div>
+      <h1 className="text-5xl font-black text-foreground mb-3">404</h1>
+      <h2 className="text-xl font-bold text-foreground mb-2">Page Not Found</h2>
+      <p className="text-muted-foreground max-w-sm mb-8">
+        The page you're looking for doesn't exist or has been moved.
+      </p>
+      <Link
+        to="/"
+        className="inline-flex items-center gap-2 bg-primary text-white px-6 py-3 rounded-lg font-semibold hover:bg-primary/90 transition-colors"
+        data-ocid="notfound.link"
+      >
+        <Home className="h-4 w-4" />
+        Back to Home
+      </Link>
+    </div>
+  );
+}
+
 const rootRoute = createRootRoute({
   component: () => (
     <AuthProvider>
@@ -38,6 +63,7 @@ const rootRoute = createRootRoute({
       <Toaster richColors position="top-right" />
     </AuthProvider>
   ),
+  notFoundComponent: NotFoundPage,
 });
 
 const homeRoute = createRoute({

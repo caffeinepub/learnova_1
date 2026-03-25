@@ -8,15 +8,15 @@ import Nat "mo:core/Nat";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
 
-actor {
+persistent actor {
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
   /// User Profile Management
   type ProfileId = Nat;
   var nextProfileId : ProfileId = 0;
-  let profiles = Map.empty<ProfileId, UserProfile>();
-  let users = Map.empty<Principal, ProfileId>();
+  var profiles = Map.empty<ProfileId, UserProfile>();
+  var users = Map.empty<Principal, ProfileId>();
 
   public type UserProfile = {
     id : ProfileId;
@@ -94,7 +94,7 @@ actor {
   /// Course Management
   type CourseId = Nat;
   var nextCourseId : CourseId = 0;
-  let courses = Map.empty<CourseId, Course>();
+  var courses = Map.empty<CourseId, Course>();
 
   public type Course = {
     id : CourseId;
@@ -187,7 +187,7 @@ actor {
     completedAt : ?Time.Time;
   };
 
-  let enrollments = Map.empty<Principal, Map.Map<Nat, Enrollment>>();
+  var enrollments = Map.empty<Principal, Map.Map<Nat, Enrollment>>();
 
   public query ({ caller }) func getEnrollments(principal : Principal) : async [Enrollment] {
     if (principal != caller and not (AccessControl.isAdmin(accessControlState, caller))) {
@@ -243,15 +243,12 @@ actor {
     email : Text;
   };
 
-  // NEW: Enroll a user by email (for admins/instructors)
   public shared ({ caller }) func enrollLearnerByEmail(courseId : CourseId, email : Text) : async () {
-    // Check course exists first
     let course = switch (courses.get(courseId)) {
       case (null) { Runtime.trap("Course not found") };
       case (?c) { c };
     };
 
-    // Authorization: Only admins OR the course instructor can enroll learners
     let callerProfile = getOrTrap(caller);
     if (not (AccessControl.isAdmin(accessControlState, caller))) {
       if (caller != course.instructorId) {
@@ -259,7 +256,6 @@ actor {
       };
     };
 
-    // Find the learner's principal by email
     let matching = profiles.values().filter(func(p) { p.email == email }).toArray();
     let profile = if (matching.size() == 0) {
       Runtime.trap("User with email " # email # " not found");
@@ -269,7 +265,6 @@ actor {
     };
     let principal = profile.principal;
 
-    // Check not already enrolled
     let existing = switch (enrollments.get(principal)) {
       case (null) { Map.empty<Nat, Enrollment>() };
       case (?existing) { existing };
@@ -294,22 +289,18 @@ actor {
     };
   };
 
-  // NEW: Get all profiles attending a course
   public query ({ caller }) func getCourseAttendees(courseId : CourseId) : async [UserProfile] {
-    // Only instructors and admins can get the attendees
     let course = switch (courses.get(courseId)) {
       case (null) { Runtime.trap("Course not found") };
       case (?course) { course };
     };
     let callerProfile = getOrTrap(caller);
     if (not (AccessControl.isAdmin(accessControlState, caller))) {
-      // Only the instructor can view their own attendees, or admin can view any course
       if (caller != course.instructorId) {
         Runtime.trap("Only course instructor or admins can view attendees");
       };
     };
 
-    // Flatten all enrollments to a single array of courses
     let allEnrollments = enrollments.entries().flatMap(
       func((principal, map)) {
         map.entries().map(
@@ -324,7 +315,6 @@ actor {
 
     if (allCourseEnrollments.size() == 0) { Runtime.trap("No enrollments for this course yet") };
 
-    // Find learner profiles for all attendees
     let attendeeProfiles = allCourseEnrollments.map(
       func((principal, _)) { getOrTrap(principal) }
     );
@@ -431,14 +421,13 @@ actor {
     completedAt : ?Time.Time;
   };
 
-  let lessonProgress = Map.empty<Principal, Map.Map<Nat, LessonProgress>>();
+  var lessonProgress = Map.empty<Principal, Map.Map<Nat, LessonProgress>>();
 
   public shared ({ caller }) func markLessonComplete(courseId : CourseId, lessonId : Text) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can mark lessons complete");
     };
     ignore getOrTrap(caller);
-    // Verify enrollment
     if (not isEnrolledInternal(caller, courseId)) {
       Runtime.trap("Must be enrolled in course to mark lessons complete");
     };
@@ -477,14 +466,13 @@ actor {
     completedAt : Time.Time;
   };
 
-  let quizAttempts = Map.empty<Principal, Map.Map<Nat, QuizAttempt>>();
+  var quizAttempts = Map.empty<Principal, Map.Map<Nat, QuizAttempt>>();
 
   public shared ({ caller }) func submitQuizAttempt(courseId : CourseId, quizId : Text, score : Nat, pointsEarned : Nat) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can submit quiz attempts");
     };
     ignore getOrTrap(caller);
-    // Verify enrollment
     if (not isEnrolledInternal(caller, courseId)) {
       Runtime.trap("Must be enrolled in course to submit quiz attempts");
     };
@@ -503,7 +491,6 @@ actor {
     };
     existingAttempts.add(existingAttempts.size(), attempt);
     quizAttempts.add(caller, existingAttempts);
-    // Award points internally
     addPointsInternal(caller, pointsEarned);
   };
 
@@ -523,7 +510,6 @@ actor {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
       Runtime.trap("Unauthorized: Only users can complete courses");
     };
-    // Verify enrollment
     if (not isEnrolledInternal(caller, courseId)) {
       Runtime.trap("Must be enrolled in course to complete it");
     };
@@ -531,7 +517,6 @@ actor {
       case (null) { Runtime.trap("Enrollment not found") };
       case (?existing) { existing };
     };
-    // Find and update existing enrollment for courseId
     var found = false;
     for ((key, enrollment) in existing.entries()) {
       if (enrollment.courseId == courseId) {
@@ -569,7 +554,7 @@ actor {
     createdAt : Time.Time;
   };
 
-  let reviews = Map.empty<CourseId, Map.Map<Principal, Review>>();
+  var reviews = Map.empty<CourseId, Map.Map<Principal, Review>>();
 
   public shared ({ caller }) func submitReview(courseId : CourseId, rating : Nat, comment : Text) : async () {
     if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
@@ -623,8 +608,8 @@ actor {
     awardedAt : Time.Time;
   };
 
-  let points = Map.empty<Principal, Nat>();
-  let badges = Map.empty<Principal, [Badge]>();
+  var points = Map.empty<Principal, Nat>();
+  var badges = Map.empty<Principal, [Badge]>();
 
   func addPointsInternal(principal : Principal, amount : Nat) {
     let existing = switch (points.get(principal)) {
@@ -670,7 +655,6 @@ actor {
     };
   };
 
-  // Helper function to check enrollment
   func isEnrolledInternal(principal : Principal, courseId : CourseId) : Bool {
     switch (enrollments.get(principal)) {
       case (null) { false };
@@ -706,7 +690,6 @@ actor {
             pMap.values().filter(func(p) { p.courseId == courseId and p.isCompleted }).toArray()
           };
         };
-        // Deduplicate lesson IDs and find earliest completion
         let seen = Map.empty<Text, Bool>();
         var completedCount = 0;
         var firstCompletion : ?Time.Time = null;
@@ -741,5 +724,23 @@ actor {
       };
     };
     result.values().toArray();
+  };
+
+  // ** Reset Database (Admin Only) **
+  public shared ({ caller }) func resetDatabase() : async () {
+    if (not (AccessControl.isAdmin(accessControlState, caller))) {
+      Runtime.trap("Unauthorized: Only admins can reset the database");
+    };
+    nextProfileId := 0;
+    nextCourseId := 0;
+    profiles := Map.empty<ProfileId, UserProfile>();
+    users := Map.empty<Principal, ProfileId>();
+    courses := Map.empty<CourseId, Course>();
+    enrollments := Map.empty<Principal, Map.Map<Nat, Enrollment>>();
+    lessonProgress := Map.empty<Principal, Map.Map<Nat, LessonProgress>>();
+    quizAttempts := Map.empty<Principal, Map.Map<Nat, QuizAttempt>>();
+    reviews := Map.empty<CourseId, Map.Map<Principal, Review>>();
+    points := Map.empty<Principal, Nat>();
+    badges := Map.empty<Principal, [Badge]>();
   };
 };
