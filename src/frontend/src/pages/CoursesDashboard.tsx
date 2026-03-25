@@ -10,7 +10,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -19,7 +18,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
   BookOpen,
@@ -32,30 +30,28 @@ import {
   Share2,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import type { Course } from "../backend.d";
 import { useAuthContext } from "../contexts/AuthContext";
-import { useActor } from "../hooks/useActor";
+import * as localDb from "../lib/localDb";
+import type { LcCourse } from "../lib/localDb";
 
 interface DisplayCourse {
   id: string;
   title: string;
   tags: string[];
-  views: number;
   lessons: number;
   duration: string;
   status: "Published" | "Draft";
 }
 
-function mapCourse(c: Course): DisplayCourse {
+function mapCourse(c: LcCourse): DisplayCourse {
   return {
-    id: c.id.toString(),
+    id: c.id,
     title: c.title,
     tags: c.tags,
-    views: Number(c.views),
-    lessons: Number(c.lessonCount),
-    duration: `${Number(c.duration)}min`,
+    lessons: c.lessons.length,
+    duration: `${c.duration}min`,
     status: c.isPublished ? "Published" : "Draft",
   };
 }
@@ -132,10 +128,6 @@ function CourseCard({ course, index, onEdit, onShare }: CourseCardProps) {
         <CardContent className="pt-0">
           <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3">
             <span className="flex items-center gap-1">
-              <Eye className="w-3.5 h-3.5" />
-              {course.views.toLocaleString()}
-            </span>
-            <span className="flex items-center gap-1">
               <BookOpen className="w-3.5 h-3.5" />
               {course.lessons} lessons
             </span>
@@ -170,29 +162,9 @@ function CourseCard({ course, index, onEdit, onShare }: CourseCardProps) {
   );
 }
 
-function CourseCardSkeleton() {
-  return (
-    <Card className="border shadow-card">
-      <CardHeader className="pb-2">
-        <Skeleton className="h-4 w-3/4" />
-        <Skeleton className="h-3 w-1/2 mt-2" />
-      </CardHeader>
-      <CardContent className="pt-0">
-        <Skeleton className="h-3 w-full mb-3" />
-        <div className="flex gap-2">
-          <Skeleton className="h-7 flex-1" />
-          <Skeleton className="h-7 flex-1" />
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 export default function CoursesDashboard() {
   const navigate = useNavigate();
-  const { actor, isFetching: actorFetching } = useActor();
-  const { role } = useAuthContext();
-  const queryClient = useQueryClient();
+  const { role, userId } = useAuthContext();
 
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [search, setSearch] = useState("");
@@ -200,17 +172,17 @@ export default function CoursesDashboard() {
   const [newCourseName, setNewCourseName] = useState("");
   const [creating, setCreating] = useState(false);
 
-  const { data: rawCourses = [], isLoading } = useQuery<Course[]>({
-    queryKey: ["courses"],
-    queryFn: async () => {
-      if (!actor) return [];
-      return actor.getCourses();
-    },
-    enabled: !!actor && !actorFetching,
-  });
-
-  // Show all courses (instructor filtering by principal not applicable with anonymous actor)
-  const allDisplayCourses: DisplayCourse[] = rawCourses.map(mapCourse);
+  const [refreshKey, setRefreshKey] = useState(0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey triggers re-read of localStorage
+  const allDisplayCourses: DisplayCourse[] = useMemo(() => {
+    const courses =
+      role === "admin"
+        ? localDb.getCourses()
+        : userId
+          ? localDb.getInstructorCourses(userId)
+          : [];
+    return courses.map(mapCourse);
+  }, [role, userId, refreshKey]);
 
   const filtered = allDisplayCourses.filter((c) =>
     c.title.toLowerCase().includes(search.toLowerCase()),
@@ -220,12 +192,21 @@ export default function CoursesDashboard() {
 
   const pageTitle = role === "admin" ? "All Courses" : "My Courses";
 
-  async function handleCreate() {
-    if (!newCourseName.trim() || !actor) return;
+  function handleCreate() {
+    if (!newCourseName.trim() || !userId) return;
     setCreating(true);
     try {
-      await actor.createCourse({ title: newCourseName.trim() });
-      queryClient.invalidateQueries({ queryKey: ["courses"] });
+      localDb.createCourse({
+        title: newCourseName.trim(),
+        instructorId: userId,
+        tags: [],
+        description: "",
+        isPublished: false,
+        visibility: "everyone",
+        accessRule: "open",
+        price: 0,
+        duration: 0,
+      });
       toast.success("Course created!", {
         description: `"${newCourseName.trim()}" added as a draft.`,
       });
@@ -235,6 +216,7 @@ export default function CoursesDashboard() {
       toast.error("Failed to create course.");
     } finally {
       setCreating(false);
+      setRefreshKey((n) => n + 1);
     }
   }
 
@@ -243,7 +225,7 @@ export default function CoursesDashboard() {
   }
 
   function handleShare(course: DisplayCourse) {
-    const link = `${window.location.origin}/courses/${course.id}`;
+    const link = `${window.location.origin}/#/learner/courses/${course.id}`;
     navigator.clipboard.writeText(link).catch(() => {});
     toast.success("Link copied!", { description: link });
   }
@@ -315,217 +297,191 @@ export default function CoursesDashboard() {
         </div>
       </div>
 
-      {/* Loading skeletons */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-3">
-            {[1, 2, 3].map((n) => (
-              <CourseCardSkeleton key={n} />
-            ))}
-          </div>
-          <div className="space-y-3">
-            {[4, 5, 6].map((n) => (
-              <CourseCardSkeleton key={n} />
-            ))}
-          </div>
-        </div>
-      ) : (
-        <AnimatePresence mode="wait">
-          {view === "kanban" ? (
-            <motion.div
-              key="kanban"
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 8 }}
-              transition={{ duration: 0.2 }}
-              className="grid grid-cols-1 md:grid-cols-2 gap-6"
-            >
-              {/* Draft column */}
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <span className="w-2.5 h-2.5 rounded-full bg-slate-400" />
-                  <h2 className="font-semibold text-sm text-foreground">
-                    Draft
-                  </h2>
-                  <span className="text-xs text-muted-foreground bg-muted rounded-full px-2 py-0.5">
-                    {drafts.length}
-                  </span>
-                </div>
-                <div className="space-y-3">
-                  {drafts.length === 0 ? (
-                    <div
-                      className="text-center py-10 text-muted-foreground text-sm border-2 border-dashed rounded-lg"
-                      data-ocid="courses.drafts.empty_state"
-                    >
-                      No courses yet. Click + to create your first course.
-                    </div>
-                  ) : (
-                    drafts.map((course, i) => (
-                      <CourseCard
-                        key={course.id}
-                        course={course}
-                        index={i}
-                        onEdit={handleEdit}
-                        onShare={handleShare}
-                      />
-                    ))
-                  )}
-                </div>
+      <AnimatePresence mode="wait">
+        {view === "kanban" ? (
+          <motion.div
+            key="kanban"
+            initial={{ opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 8 }}
+            transition={{ duration: 0.2 }}
+            className="grid grid-cols-1 md:grid-cols-2 gap-6"
+          >
+            {/* Draft column */}
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <span className="w-2.5 h-2.5 rounded-full bg-slate-400" />
+                <h2 className="font-semibold text-sm text-foreground">Draft</h2>
+                <span className="text-xs text-muted-foreground bg-muted rounded-full px-2 py-0.5">
+                  {drafts.length}
+                </span>
               </div>
+              <div className="space-y-3">
+                {drafts.length === 0 ? (
+                  <div
+                    className="text-center py-10 text-muted-foreground text-sm border-2 border-dashed rounded-lg"
+                    data-ocid="courses.drafts.empty_state"
+                  >
+                    No courses yet. Click + to create your first course.
+                  </div>
+                ) : (
+                  drafts.map((course, i) => (
+                    <CourseCard
+                      key={course.id}
+                      course={course}
+                      index={i}
+                      onEdit={handleEdit}
+                      onShare={handleShare}
+                    />
+                  ))
+                )}
+              </div>
+            </div>
 
-              {/* Published column */}
-              <div>
-                <div className="flex items-center gap-2 mb-4">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                  <h2 className="font-semibold text-sm text-foreground">
-                    Published
-                  </h2>
-                  <span className="text-xs text-muted-foreground bg-muted rounded-full px-2 py-0.5">
-                    {published.length}
-                  </span>
-                </div>
-                <div className="space-y-3">
-                  {published.length === 0 ? (
-                    <div
-                      className="text-center py-10 text-muted-foreground text-sm border-2 border-dashed rounded-lg"
-                      data-ocid="courses.published.empty_state"
-                    >
-                      No courses yet. Click + to create your first course.
-                    </div>
-                  ) : (
-                    published.map((course, i) => (
-                      <CourseCard
-                        key={course.id}
-                        course={course}
-                        index={drafts.length + i}
-                        onEdit={handleEdit}
-                        onShare={handleShare}
-                      />
-                    ))
-                  )}
-                </div>
+            {/* Published column */}
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                <h2 className="font-semibold text-sm text-foreground">
+                  Published
+                </h2>
+                <span className="text-xs text-muted-foreground bg-muted rounded-full px-2 py-0.5">
+                  {published.length}
+                </span>
               </div>
-            </motion.div>
-          ) : (
-            <motion.div
-              key="list"
-              initial={{ opacity: 0, x: 8 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -8 }}
-              transition={{ duration: 0.2 }}
-            >
-              <Card className="border shadow-card overflow-hidden">
-                <Table data-ocid="courses.table">
-                  <TableHeader>
-                    <TableRow className="bg-muted/40 hover:bg-muted/40">
-                      <TableHead className="font-semibold">Title</TableHead>
-                      <TableHead className="font-semibold">Tags</TableHead>
-                      <TableHead className="font-semibold text-center">
-                        <span className="flex items-center gap-1 justify-center">
-                          <Eye className="w-3.5 h-3.5" /> Views
-                        </span>
-                      </TableHead>
-                      <TableHead className="font-semibold text-center">
-                        <span className="flex items-center gap-1 justify-center">
-                          <BookOpen className="w-3.5 h-3.5" /> Lessons
-                        </span>
-                      </TableHead>
-                      <TableHead className="font-semibold text-center">
-                        <span className="flex items-center gap-1 justify-center">
-                          <Clock className="w-3.5 h-3.5" /> Duration
-                        </span>
-                      </TableHead>
-                      <TableHead className="font-semibold">Status</TableHead>
-                      <TableHead className="font-semibold text-right">
-                        Actions
-                      </TableHead>
+              <div className="space-y-3">
+                {published.length === 0 ? (
+                  <div
+                    className="text-center py-10 text-muted-foreground text-sm border-2 border-dashed rounded-lg"
+                    data-ocid="courses.published.empty_state"
+                  >
+                    No courses yet. Click + to create your first course.
+                  </div>
+                ) : (
+                  published.map((course, i) => (
+                    <CourseCard
+                      key={course.id}
+                      course={course}
+                      index={drafts.length + i}
+                      onEdit={handleEdit}
+                      onShare={handleShare}
+                    />
+                  ))
+                )}
+              </div>
+            </div>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="list"
+            initial={{ opacity: 0, x: 8 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -8 }}
+            transition={{ duration: 0.2 }}
+          >
+            <Card className="border shadow-card overflow-hidden">
+              <Table data-ocid="courses.table">
+                <TableHeader>
+                  <TableRow className="bg-muted/40 hover:bg-muted/40">
+                    <TableHead className="font-semibold">Title</TableHead>
+                    <TableHead className="font-semibold">Tags</TableHead>
+                    <TableHead className="font-semibold text-center">
+                      <span className="flex items-center gap-1 justify-center">
+                        <BookOpen className="w-3.5 h-3.5" /> Lessons
+                      </span>
+                    </TableHead>
+                    <TableHead className="font-semibold text-center">
+                      <span className="flex items-center gap-1 justify-center">
+                        <Clock className="w-3.5 h-3.5" /> Duration
+                      </span>
+                    </TableHead>
+                    <TableHead className="font-semibold">Status</TableHead>
+                    <TableHead className="font-semibold text-right">
+                      Actions
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={6}
+                        className="text-center py-10 text-muted-foreground"
+                        data-ocid="courses.list.empty_state"
+                      >
+                        No results found for your search.
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filtered.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={7}
-                          className="text-center py-10 text-muted-foreground"
-                          data-ocid="courses.list.empty_state"
-                        >
-                          No results found for your search.
+                  ) : (
+                    filtered.map((course, i) => (
+                      <TableRow
+                        key={course.id}
+                        className="hover:bg-muted/30 transition-colors"
+                        data-ocid={`courses.row.item.${i + 1}`}
+                      >
+                        <TableCell className="font-medium max-w-[220px]">
+                          <span className="line-clamp-2 leading-snug">
+                            {course.title}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {course.tags.slice(0, 2).map((tag) => (
+                              <Badge
+                                key={tag}
+                                variant="outline"
+                                className={`text-[10px] font-medium px-1.5 py-0 border ${tagClass(tag)}`}
+                              >
+                                {tag}
+                              </Badge>
+                            ))}
+                            {course.tags.length > 2 && (
+                              <span className="text-xs text-muted-foreground">
+                                +{course.tags.length - 2}
+                              </span>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center text-sm">
+                          {course.lessons}
+                        </TableCell>
+                        <TableCell className="text-center text-sm">
+                          {course.duration}
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge status={course.status} />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex gap-1.5 justify-end">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0"
+                              onClick={() => handleEdit(course)}
+                              data-ocid={`courses.list.edit_button.${i + 1}`}
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0"
+                              onClick={() => handleShare(course)}
+                              data-ocid={`courses.list.share.${i + 1}.button`}
+                            >
+                              <Share2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
-                    ) : (
-                      filtered.map((course, i) => (
-                        <TableRow
-                          key={course.id}
-                          className="hover:bg-muted/30 transition-colors"
-                          data-ocid={`courses.row.item.${i + 1}`}
-                        >
-                          <TableCell className="font-medium max-w-[220px]">
-                            <span className="line-clamp-2 leading-snug">
-                              {course.title}
-                            </span>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              {course.tags.slice(0, 2).map((tag) => (
-                                <Badge
-                                  key={tag}
-                                  variant="outline"
-                                  className={`text-[10px] font-medium px-1.5 py-0 border ${tagClass(tag)}`}
-                                >
-                                  {tag}
-                                </Badge>
-                              ))}
-                              {course.tags.length > 2 && (
-                                <span className="text-xs text-muted-foreground">
-                                  +{course.tags.length - 2}
-                                </span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center text-sm">
-                            {course.views.toLocaleString()}
-                          </TableCell>
-                          <TableCell className="text-center text-sm">
-                            {course.lessons}
-                          </TableCell>
-                          <TableCell className="text-center text-sm">
-                            {course.duration}
-                          </TableCell>
-                          <TableCell>
-                            <StatusBadge status={course.status} />
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex gap-1.5 justify-end">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 w-7 p-0"
-                                onClick={() => handleEdit(course)}
-                                data-ocid={`courses.list.edit_button.${i + 1}`}
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 w-7 p-0"
-                                onClick={() => handleShare(course)}
-                                data-ocid={`courses.list.share.${i + 1}.button`}
-                              >
-                                <Share2 className="w-3.5 h-3.5" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </Card>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      )}
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Create dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>

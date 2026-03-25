@@ -1,7 +1,5 @@
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { useActor } from "@/hooks/useActor";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import {
   ArrowLeft,
@@ -18,78 +16,16 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import { toast } from "sonner";
-import type { LessonProgress } from "../backend.d";
 import QuizPlayerComponent from "../components/QuizPlayerComponent";
-
-interface Attachment {
-  name: string;
-  url: string;
-}
-
-interface LessonData {
-  id: string;
-  title: string;
-  type: "Video" | "Document" | "Image" | "Quiz";
-  url?: string;
-  quizId?: string;
-  description?: string;
-  attachments?: Attachment[];
-}
-
-const SAMPLE_LESSONS: LessonData[] = [
-  {
-    id: "l1",
-    title: "Introduction & Overview",
-    type: "Video",
-    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-    description:
-      "Get started with a comprehensive introduction to this course. We cover the learning objectives, what tools you'll need, and how to get the most out of each lesson.",
-    attachments: [
-      { name: "Course Syllabus.pdf", url: "#" },
-      { name: "Getting Started Guide.pdf", url: "#" },
-    ],
-  },
-  {
-    id: "l2",
-    title: "Core Concepts Guide",
-    type: "Document",
-    url: "https://docs.google.com/document/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms/edit",
-    description:
-      "A comprehensive guide covering all the core concepts and fundamental principles you need to master.",
-    attachments: [{ name: "Core Concepts Cheatsheet.pdf", url: "#" }],
-  },
-  {
-    id: "l3",
-    title: "Visual Reference",
-    type: "Image",
-    url: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800",
-    description:
-      "Visual diagrams and reference materials to reinforce the concepts covered in the previous lessons.",
-  },
-  {
-    id: "l4",
-    title: "Knowledge Check",
-    type: "Quiz",
-    quizId: "q1",
-    description:
-      "Test your understanding of the material covered so far. This quiz covers the core concepts from lessons 1-3.",
-  },
-  {
-    id: "l5",
-    title: "Advanced Topics",
-    type: "Video",
-    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-    description:
-      "Dive deeper into advanced topics and real-world applications of the concepts you've learned.",
-  },
-];
+import { useAuthContext } from "../contexts/AuthContext";
+import * as localDb from "../lib/localDb";
 
 // ── Badge system ──
 const BADGE_TIERS = [
   { name: "Starter", emoji: "🌟", min: 0, max: 19 },
   { name: "Newbie", emoji: "🌱", min: 20, max: 39 },
   { name: "Explorer", emoji: "🔍", min: 40, max: 59 },
-  { name: "Achiever", emoji: "🏅", min: 60, max: 79 },
+  { name: "Achiever", emoji: "🎅", min: 60, max: 79 },
   { name: "Specialist", emoji: "⭐", min: 80, max: 99 },
   { name: "Expert", emoji: "🚀", min: 100, max: 119 },
   { name: "Master", emoji: "🏆", min: 120, max: Number.POSITIVE_INFINITY },
@@ -106,13 +42,12 @@ function getNextBadgeTier(pts: number) {
 function getBadgeProgress(pts: number) {
   const current = getBadgeTier(pts);
   const next = getNextBadgeTier(pts);
-  if (!next) return 100; // Master tier
+  if (!next) return 100;
   const range = next.min - current.min;
   const progress = pts - current.min;
   return Math.min(100, Math.round((progress / range) * 100));
 }
 
-// ── Helpers ──
 function getYouTubeEmbedUrl(url: string): string | null {
   const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?]+)/);
   if (match) return `https://www.youtube.com/embed/${match[1]}`;
@@ -262,7 +197,6 @@ function ImageViewer({ url, title }: { url?: string; title: string }) {
   );
 }
 
-// ── Badge Popup ──
 interface BadgePopupProps {
   earnedPoints: number;
   totalPoints: number;
@@ -298,10 +232,7 @@ function BadgePopup({
         onClick={(e) => e.stopPropagation()}
         className="relative bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden"
       >
-        {/* Top accent bar */}
         <div className="h-1 w-full bg-gradient-to-r from-blue-500 via-violet-500 to-emerald-500" />
-
-        {/* Close button */}
         <button
           type="button"
           data-ocid="quiz.close_button"
@@ -313,7 +244,6 @@ function BadgePopup({
         </button>
 
         <div className="px-8 py-8 flex flex-col items-center text-center gap-5">
-          {/* Confetti emoji burst */}
           <motion.div
             initial={{ scale: 0, rotate: -20 }}
             animate={{ scale: 1, rotate: 0 }}
@@ -327,7 +257,6 @@ function BadgePopup({
             🎉
           </motion.div>
 
-          {/* Points heading */}
           <div className="space-y-1">
             <h2 className="text-2xl font-bold text-white">
               You have earned{" "}
@@ -341,59 +270,30 @@ function BadgePopup({
             </p>
           </div>
 
-          {/* Current badge */}
           <div className="flex items-center gap-3 bg-zinc-800 border border-zinc-700 rounded-xl px-5 py-3">
             <span className="text-3xl">{currentTier.emoji}</span>
             <div className="text-left">
-              <p className="text-xs text-zinc-500 font-medium uppercase tracking-wider">
-                Current Badge
-              </p>
-              <p className="text-lg font-bold text-white">{currentTier.name}</p>
-            </div>
-          </div>
-
-          {/* Progress toward next badge */}
-          <div className="w-full space-y-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-zinc-400 font-medium">
-                {currentTier.emoji} {currentTier.name}
-              </span>
+              <p className="font-bold text-white text-sm">{currentTier.name}</p>
               {nextTier ? (
-                <span className="text-zinc-400 font-medium">
-                  {nextTier.emoji} {nextTier.name}
-                </span>
+                <p className="text-xs text-zinc-400">
+                  {totalPoints}/{nextTier.min} pts to {nextTier.name}
+                </p>
               ) : (
-                <span className="text-emerald-400 font-semibold">
-                  Max Tier 🏆
-                </span>
+                <p className="text-xs text-zinc-400">Max tier reached!</p>
               )}
             </div>
-            <div className="relative h-3 bg-zinc-800 rounded-full overflow-hidden border border-zinc-700">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${progress}%` }}
-                transition={{ delay: 0.3, duration: 0.7, ease: "easeOut" }}
-                className="h-full bg-gradient-to-r from-blue-500 to-violet-500 rounded-full"
-              />
-            </div>
-            {nextTier ? (
-              <p className="text-xs text-center text-zinc-500">
-                <span className="text-zinc-300 font-semibold">
-                  {Math.max(0, nextTier.min - totalPoints)} pts
-                </span>{" "}
-                to unlock{" "}
-                <span className="text-zinc-300 font-semibold">
-                  {nextTier.name}
-                </span>
-              </p>
-            ) : (
-              <p className="text-xs text-center text-emerald-400 font-semibold">
-                You've reached the highest badge tier!
-              </p>
-            )}
           </div>
 
-          {/* Actions */}
+          {nextTier && (
+            <div className="w-full">
+              <div className="flex justify-between text-xs text-zinc-500 mb-1.5">
+                <span>{currentTier.name}</span>
+                <span>{nextTier.name}</span>
+              </div>
+              <Progress value={progress} className="h-2 bg-zinc-700" />
+            </div>
+          )}
+
           <Button
             data-ocid="quiz.confirm_button"
             onClick={onContinue}
@@ -413,9 +313,7 @@ export default function LessonPlayerPage() {
     lessonId: string;
   };
   const navigate = useNavigate();
-  const { actor, isFetching } = useActor();
-  const qc = useQueryClient();
-  const enabled = !!actor && !isFetching;
+  const { userId } = useAuthContext();
 
   const [sidebarOpen, setSidebarOpen] = useState(
     typeof window !== "undefined" && window.innerWidth >= 768,
@@ -424,30 +322,14 @@ export default function LessonPlayerPage() {
   const [showBadgePopup, setShowBadgePopup] = useState(false);
   const [earnedPoints, setEarnedPoints] = useState(0);
   const [totalPoints, setTotalPoints] = useState(0);
+  const [, forceUpdate] = useState(0);
 
-  const { data: courses } = useQuery<any[]>({
-    queryKey: ["courses"],
-    queryFn: async () => (actor ? actor.getCourses() : []),
-    enabled,
-  });
+  const course = localDb.getCourseById(courseId);
+  const lessons = course?.lessons ?? [];
 
-  const { data: lessonProgress } = useQuery<LessonProgress[]>({
-    queryKey: ["lessonProgress", courseId],
-    queryFn: async () =>
-      actor ? actor.getMyLessonProgress(BigInt(courseId)) : [],
-    enabled,
-    staleTime: 0,
-  });
-
-  const lessons: LessonData[] = (() => {
-    try {
-      const raw = localStorage.getItem(`learnova_lessons_${courseId}`);
-      const parsed = raw ? JSON.parse(raw) : null;
-      return parsed && parsed.length > 0 ? parsed : SAMPLE_LESSONS;
-    } catch {
-      return SAMPLE_LESSONS;
-    }
-  })();
+  const completedIds = new Set(
+    userId ? localDb.getLessonProgress(userId, courseId) : [],
+  );
 
   const currentIdx = lessons.findIndex((l) => l.id === lessonId);
   const lesson = lessons[currentIdx !== -1 ? currentIdx : 0];
@@ -455,27 +337,18 @@ export default function LessonPlayerPage() {
   const prevLesson = effectiveIdx > 0 ? lessons[effectiveIdx - 1] : null;
   const nextLesson =
     effectiveIdx < lessons.length - 1 ? lessons[effectiveIdx + 1] : null;
-  const completedIds = new Set(
-    (lessonProgress ?? []).filter((p) => p.isCompleted).map((p) => p.lessonId),
-  );
   const isComplete = completedIds.has(lessonId);
   const completedCount = completedIds.size;
-  const currentCourse = (courses ?? []).find(
-    (c: any) => c.id.toString() === courseId,
-  );
-  const totalLessons = currentCourse
-    ? Number(currentCourse.lessonCount)
-    : lessons.length;
+  const totalLessons = lessons.length;
   const progressPct =
     totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0;
 
-  const handleMarkComplete = async () => {
-    if (!actor || isComplete) return;
+  const handleMarkComplete = () => {
+    if (!userId || isComplete) return;
     setMarking(true);
     try {
-      await actor.markLessonComplete(BigInt(courseId), lessonId);
-      qc.invalidateQueries({ queryKey: ["lessonProgress", courseId] });
-      qc.invalidateQueries({ queryKey: ["courses"] });
+      localDb.markLessonComplete(userId, courseId, lessonId);
+      forceUpdate((n) => n + 1);
       toast.success("Lesson marked as complete!");
     } catch {
       toast.error("Failed to mark lesson as complete");
@@ -484,41 +357,26 @@ export default function LessonPlayerPage() {
     }
   };
 
-  const handleQuizComplete = async (pts: number) => {
-    // Mark lesson complete in backend
-    await handleMarkComplete();
-
-    // Fetch real accumulated total from backend
-    let realTotal = pts;
-    if (actor) {
-      try {
-        realTotal = Number(await actor.getMyPoints());
-      } catch {}
+  const handleQuizComplete = (pts: number) => {
+    if (userId) {
+      localDb.markLessonComplete(userId, courseId, lessonId);
+      const newTotal = localDb.addPoints(userId, pts);
+      setEarnedPoints(pts);
+      setTotalPoints(newTotal);
+      forceUpdate((n) => n + 1);
+    } else {
+      setEarnedPoints(pts);
+      setTotalPoints(pts);
     }
-    setEarnedPoints(pts);
-    setTotalPoints(realTotal);
-    qc.invalidateQueries({ queryKey: ["myPoints"] });
     setShowBadgePopup(true);
   };
 
   const handlePopupContinue = () => {
     setShowBadgePopup(false);
     if (nextLesson) {
-      navigate({
-        to: `/learner/courses/${courseId}/lessons/${nextLesson.id}`,
-      });
+      navigate({ to: `/learner/courses/${courseId}/lessons/${nextLesson.id}` });
     }
   };
-
-  const courseTitle = (() => {
-    try {
-      const raw = localStorage.getItem(`learnova_course_${courseId}`);
-      const parsed = raw ? JSON.parse(raw) : null;
-      return parsed?.title ?? "Course Lessons";
-    } catch {
-      return "Course Lessons";
-    }
-  })();
 
   if (!lesson) {
     return (
@@ -528,9 +386,12 @@ export default function LessonPlayerPage() {
     );
   }
 
+  // Map LcLesson to expected shape
+  const lessonUrl = lesson.videoUrl ?? lesson.documentUrl ?? lesson.imageUrl;
+  const lessonDescription = lesson.description;
+
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex flex-col overflow-hidden">
-      {/* ── Badge Popup ── */}
       <AnimatePresence>
         {showBadgePopup && (
           <BadgePopup
@@ -542,7 +403,7 @@ export default function LessonPlayerPage() {
         )}
       </AnimatePresence>
 
-      {/* ── Header strip ── */}
+      {/* Header strip */}
       <header className="flex items-center gap-3 px-3 h-12 border-b border-zinc-800 bg-zinc-900 flex-shrink-0">
         <button
           type="button"
@@ -565,15 +426,13 @@ export default function LessonPlayerPage() {
         </button>
 
         <div className="flex-1" />
-
         <span className="text-xs text-zinc-400 font-medium">
           Lesson {effectiveIdx + 1} of {lessons.length}
         </span>
       </header>
 
-      {/* ── Body: sidebar + main ── */}
+      {/* Body */}
       <div className="flex flex-1 overflow-hidden relative">
-        {/* Mobile backdrop overlay */}
         {sidebarOpen && (
           <div
             className="fixed inset-0 bg-black/50 z-20 md:hidden"
@@ -584,7 +443,8 @@ export default function LessonPlayerPage() {
             aria-label="Close sidebar"
           />
         )}
-        {/* ── Left Sidebar ── */}
+
+        {/* Left Sidebar */}
         <AnimatePresence initial={false}>
           {sidebarOpen && (
             <motion.aside
@@ -600,13 +460,12 @@ export default function LessonPlayerPage() {
                 className="flex flex-col h-full overflow-hidden"
                 style={{ width: 280 }}
               >
-                {/* Course info */}
                 <div className="px-4 pt-4 pb-3 border-b border-zinc-800 flex-shrink-0">
                   <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-1">
                     Course
                   </p>
                   <h2 className="text-sm font-bold text-white truncate leading-snug">
-                    {courseTitle}
+                    {course?.title ?? "Course Lessons"}
                   </h2>
                   <div className="mt-3">
                     <div className="flex items-center justify-between mb-1">
@@ -622,7 +481,6 @@ export default function LessonPlayerPage() {
                   </div>
                 </div>
 
-                {/* Lesson list */}
                 <div className="flex-1 overflow-y-auto py-2">
                   {lessons.map((l, idx) => {
                     const isLessonComplete = completedIds.has(l.id);
@@ -652,23 +510,6 @@ export default function LessonPlayerPage() {
                             {idx + 1}. {l.title}
                           </span>
                         </button>
-
-                        {l.attachments && l.attachments.length > 0 && (
-                          <div className="pl-10 pr-4 pb-1 space-y-0.5">
-                            {l.attachments.map((att) => (
-                              <a
-                                key={att.name}
-                                href={att.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-1.5 py-1 text-xs text-zinc-500 hover:text-blue-400 transition-colors group"
-                              >
-                                <Paperclip className="h-3 w-3 flex-shrink-0 group-hover:text-blue-400" />
-                                <span className="truncate">{att.name}</span>
-                              </a>
-                            ))}
-                          </div>
-                        )}
                       </div>
                     );
                   })}
@@ -678,7 +519,7 @@ export default function LessonPlayerPage() {
           )}
         </AnimatePresence>
 
-        {/* ── Main Content Area ── */}
+        {/* Main Content Area */}
         <main className="flex-1 flex flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto">
             <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-10 py-6 sm:py-8">
@@ -688,7 +529,6 @@ export default function LessonPlayerPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
               >
-                {/* Lesson header */}
                 <div className="mb-6">
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
@@ -704,32 +544,27 @@ export default function LessonPlayerPage() {
                     {lesson.title}
                   </h1>
                   <p className="mt-3 text-sm text-zinc-400 leading-relaxed">
-                    {lesson.description ?? "No description provided."}
+                    {lessonDescription ?? "No description provided."}
                   </p>
                 </div>
 
                 <div className="border-t border-zinc-800 mb-6" />
 
-                {/* Content Viewer */}
                 <div className="space-y-4">
-                  {lesson.type === "Video" && lesson.url && (
-                    <VideoPlayer url={lesson.url} />
+                  {lesson.type === "Video" && lessonUrl && (
+                    <VideoPlayer url={lessonUrl} />
                   )}
-
-                  {lesson.type === "Video" && !lesson.url && (
+                  {lesson.type === "Video" && !lessonUrl && (
                     <div className="aspect-video bg-zinc-900 border border-zinc-800 rounded-xl flex items-center justify-center">
                       <p className="text-zinc-500">No video URL provided</p>
                     </div>
                   )}
-
                   {lesson.type === "Document" && (
-                    <DocumentViewer url={lesson.url} />
+                    <DocumentViewer url={lessonUrl} />
                   )}
-
                   {lesson.type === "Image" && (
-                    <ImageViewer url={lesson.url} title={lesson.title} />
+                    <ImageViewer url={lessonUrl} title={lesson.title} />
                   )}
-
                   {lesson.type === "Quiz" && (
                     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
                       <QuizPlayerComponent
@@ -741,13 +576,12 @@ export default function LessonPlayerPage() {
                   )}
                 </div>
 
-                {/* Spacer for bottom nav */}
                 <div className="h-24" />
               </motion.div>
             </div>
           </div>
 
-          {/* ── Bottom navigation bar ── */}
+          {/* Bottom navigation bar */}
           <div className="flex-shrink-0 flex items-center justify-between px-3 sm:px-6 py-3 border-t border-zinc-800 bg-zinc-900 gap-1 sm:gap-2">
             <Button
               data-ocid="lesson_player.secondary_button"

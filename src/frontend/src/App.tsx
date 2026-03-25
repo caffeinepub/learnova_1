@@ -1,8 +1,10 @@
 import { Toaster } from "@/components/ui/sonner";
 import {
   Link,
+  Navigate,
   Outlet,
   RouterProvider,
+  createHashHistory,
   createRootRoute,
   createRoute,
   createRouter,
@@ -10,7 +12,7 @@ import {
 import { GraduationCap, Home } from "lucide-react";
 import AppLayout from "./components/AppLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
-import { AuthProvider } from "./contexts/AuthContext";
+import { AuthProvider, useAuthContext } from "./contexts/AuthContext";
 
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminUsersPage from "./pages/AdminUsersPage";
@@ -30,6 +32,13 @@ import ProfilePage from "./pages/ProfilePage";
 import ReportingDashboardPage from "./pages/ReportingDashboardPage";
 import SignupPage from "./pages/SignupPage";
 import UnauthorizedPage from "./pages/UnauthorizedPage";
+
+function RootRedirect() {
+  const { isAuthenticated, role } = useAuthContext();
+  if (!isAuthenticated) return <HomePage />;
+  if (role === "learner") return <Navigate to="/learner/courses" />;
+  return <Navigate to="/instructor/courses" />;
+}
 
 function NotFoundPage() {
   return (
@@ -54,6 +63,8 @@ function NotFoundPage() {
   );
 }
 
+const hashHistory = createHashHistory();
+
 const rootRoute = createRootRoute({
   component: () => (
     <AuthProvider>
@@ -69,7 +80,7 @@ const rootRoute = createRootRoute({
 const homeRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  component: HomePage,
+  component: RootRedirect,
 });
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -238,7 +249,7 @@ const routeTree = rootRoute.addChildren([
   profileRoute,
 ]);
 
-const router = createRouter({ routeTree });
+const router = createRouter({ routeTree, history: hashHistory });
 
 declare module "@tanstack/react-router" {
   interface Register {

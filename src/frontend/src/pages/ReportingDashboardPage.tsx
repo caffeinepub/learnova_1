@@ -21,8 +21,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useActor } from "@/hooks/useActor";
-import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeft,
@@ -37,8 +35,9 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useState } from "react";
-import type { Course, LearnerCourseReport, UserProfile } from "../backend.d";
 import { useAuthContext } from "../contexts/AuthContext";
+import * as localDb from "../lib/localDb";
+import type { ReportRow } from "../lib/localDb";
 
 type LearnerStatus = "yetToStart" | "inProgress" | "completed";
 type FilterStatus = LearnerStatus | "all";
@@ -153,61 +152,44 @@ interface ProgressRow {
   status: LearnerStatus;
 }
 
-function nsToDateStr(ns: bigint): string {
-  return new Date(Number(ns / 1_000_000n)).toISOString().split("T")[0];
+function tsToDateStr(ts?: number): string {
+  if (!ts) return "—";
+  return new Date(ts).toISOString().split("T")[0];
 }
 
-function buildRowsFromReports(
-  reports: LearnerCourseReport[],
-  courses: Course[],
-  users: UserProfile[],
-): ProgressRow[] {
-  const courseMap = new Map<string, Course>();
-  for (const c of courses) courseMap.set(String(c.id), c);
-
-  const userMap = new Map<string, UserProfile>();
-  for (const u of users) userMap.set(u.principal.toString(), u);
-
-  const rows: ProgressRow[] = [];
-  for (const report of reports) {
-    const course = courseMap.get(String(report.courseId));
-    const user = userMap.get(report.learnerPrincipal.toString());
-    if (!course || !user) continue;
-
-    const lessonCount = Number(course.lessonCount);
+function buildRows(reports: ReportRow[]): ProgressRow[] {
+  return reports.map((report) => {
     const completionPct =
-      lessonCount > 0
-        ? Math.round((Number(report.completedLessons) / lessonCount) * 100)
+      report.totalLessons > 0
+        ? Math.round((report.completedLessons / report.totalLessons) * 100)
         : 0;
 
     let status: LearnerStatus;
     if (report.isCompleted) {
       status = "completed";
-    } else if (completionPct === 0 && !report.startedAt) {
+    } else if (completionPct === 0) {
       status = "yetToStart";
     } else {
       status = "inProgress";
     }
 
-    rows.push({
-      id: `${report.learnerPrincipal.toString()}-${String(report.courseId)}`,
-      courseName: course.title,
-      participantName: user.name,
-      enrolledDate: nsToDateStr(report.enrolledAt),
-      startDate: report.startedAt ? nsToDateStr(report.startedAt) : "—",
+    return {
+      id: `${report.userId}-${report.courseId}`,
+      courseName: report.courseTitle,
+      participantName: report.userName,
+      enrolledDate: tsToDateStr(report.enrolledAt),
+      startDate: completionPct > 0 ? tsToDateStr(report.enrolledAt) : "—",
       timeSpent: "—",
       completionPct,
-      completedDate: report.completedAt ? nsToDateStr(report.completedAt) : "—",
+      completedDate: report.completedAt ? tsToDateStr(report.completedAt) : "—",
       status,
-    });
-  }
-  return rows;
+    };
+  });
 }
 
 export default function ReportingDashboardPage() {
   const navigate = useNavigate();
-  const { role } = useAuthContext();
-  const { actor, isFetching } = useActor();
+  const { role, userId } = useAuthContext();
   const [activeFilter, setActiveFilter] = useState<FilterStatus>("all");
   const [search, setSearch] = useState("");
   const [selectedCourse, setSelectedCourse] = useState("all");
@@ -215,44 +197,21 @@ export default function ReportingDashboardPage() {
     useState<VisibleColumns>(defaultVisible);
   const [panelOpen, setPanelOpen] = useState(false);
 
-  const enabled = !!actor && !isFetching;
+  const rawReports = useMemo(() => {
+    return localDb.getReportingData(
+      role === "admin" ? undefined : (userId ?? undefined),
+    );
+  }, [role, userId]);
 
-  const { data: reportingData = [], isLoading: reportingLoading } = useQuery<
-    LearnerCourseReport[]
-  >({
-    queryKey: ["reportingData"],
-    queryFn: async () => {
-      if (!actor) return [];
-      return (actor as any).getReportingData();
-    },
-    enabled,
-  });
+  const courses = useMemo(() => {
+    return role === "admin"
+      ? localDb.getCourses()
+      : userId
+        ? localDb.getInstructorCourses(userId)
+        : [];
+  }, [role, userId]);
 
-  const { data: courses = [] } = useQuery<Course[]>({
-    queryKey: ["courses"],
-    queryFn: async () => {
-      if (!actor) return [];
-      return actor.getCourses();
-    },
-    enabled,
-  });
-
-  const { data: users = [] } = useQuery<UserProfile[]>({
-    queryKey: ["allUsers"],
-    queryFn: async () => {
-      if (!actor) return [];
-      return actor.getAllUsers();
-    },
-    enabled,
-  });
-
-  // Show all courses (no per-user instructor filtering with anonymous actor)
-  const filteredCourses = useMemo(() => courses, [courses]);
-
-  const allRows = useMemo(
-    () => buildRowsFromReports(reportingData, filteredCourses, users),
-    [reportingData, filteredCourses, users],
-  );
+  const allRows = useMemo(() => buildRows(rawReports), [rawReports]);
 
   const counts = {
     all: allRows.length,
@@ -264,10 +223,7 @@ export default function ReportingDashboardPage() {
   const filtered = allRows.filter((row) => {
     const matchesFilter = activeFilter === "all" || row.status === activeFilter;
     const matchesCourse =
-      selectedCourse === "all" ||
-      filteredCourses.some(
-        (c) => String(c.id) === selectedCourse && c.title === row.courseName,
-      );
+      selectedCourse === "all" || row.courseName === selectedCourse;
     const q = search.toLowerCase();
     const matchesSearch =
       !search ||
@@ -290,7 +246,6 @@ export default function ReportingDashboardPage() {
       : "bg-blue-100 text-blue-700 border-blue-200";
 
   const visibleCols = ALL_COLUMNS.filter((c) => visibleColumns[c.key]);
-  const isLoading = reportingLoading;
 
   return (
     <div className="min-h-screen bg-background" data-ocid="reporting.page">
@@ -359,9 +314,11 @@ export default function ReportingDashboardPage() {
                       )}
                     </div>
                     <div
-                      className={`text-3xl font-bold mb-0.5 ${isActive ? card.textClass : "text-foreground"}`}
+                      className={`text-3xl font-bold mb-0.5 ${
+                        isActive ? card.textClass : "text-foreground"
+                      }`}
                     >
-                      {isLoading ? "—" : counts[card.key]}
+                      {counts[card.key]}
                     </div>
                     <div className="text-sm text-muted-foreground">
                       {card.label}
@@ -394,8 +351,8 @@ export default function ReportingDashboardPage() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Courses</SelectItem>
-              {filteredCourses.map((c) => (
-                <SelectItem key={String(c.id)} value={String(c.id)}>
+              {courses.map((c) => (
+                <SelectItem key={c.id} value={c.title}>
                   {c.title}
                 </SelectItem>
               ))}
@@ -440,7 +397,9 @@ export default function ReportingDashboardPage() {
                     {visibleCols.map((col) => (
                       <TableHead
                         key={col.key}
-                        className={`whitespace-nowrap ${col.key === "srNo" ? "w-16 pl-5" : ""} ${col.key === "completionPct" ? "min-w-[140px]" : ""}`}
+                        className={`whitespace-nowrap ${
+                          col.key === "srNo" ? "w-16 pl-5" : ""
+                        } ${col.key === "completionPct" ? "min-w-[140px]" : ""}`}
                       >
                         {col.label}
                       </TableHead>
@@ -448,17 +407,7 @@ export default function ReportingDashboardPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {isLoading ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={visibleCols.length}
-                        className="text-center py-12 text-muted-foreground"
-                        data-ocid="reporting.loading_state"
-                      >
-                        Loading learner progress…
-                      </TableCell>
-                    </TableRow>
-                  ) : filtered.length === 0 ? (
+                  {filtered.length === 0 ? (
                     <TableRow>
                       <TableCell
                         colSpan={visibleCols.length}
@@ -543,7 +492,9 @@ export default function ReportingDashboardPage() {
                         {visibleColumns.status && (
                           <TableCell>
                             <Badge
-                              className={`text-xs whitespace-nowrap ${STATUS_BADGE_CLASS[row.status]}`}
+                              className={`text-xs whitespace-nowrap ${
+                                STATUS_BADGE_CLASS[row.status]
+                              }`}
                             >
                               {STATUS_LABEL[row.status]}
                             </Badge>

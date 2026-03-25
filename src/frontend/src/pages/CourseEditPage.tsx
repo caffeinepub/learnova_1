@@ -23,8 +23,8 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { useActor } from "@/hooks/useActor";
-import { useQuery } from "@tanstack/react-query";
+import * as localDb from "../lib/localDb";
+
 import { useNavigate, useParams } from "@tanstack/react-router";
 import {
   ArrowLeft,
@@ -82,43 +82,6 @@ interface CourseFormState {
   published: boolean;
   imageUrl: string | null;
 }
-
-const SEED_LESSONS: Lesson[] = [
-  {
-    id: "1",
-    title: "Introduction to React Hooks",
-    type: "Video",
-    videoUrl: "https://youtube.com/watch?v=example1",
-    description:
-      "A comprehensive overview of React Hooks and how they replace class lifecycle methods.",
-    attachments: [],
-  },
-  {
-    id: "2",
-    title: "Setting Up Your Development Environment",
-    type: "Document",
-    documentFile: "setup-guide.pdf",
-    description:
-      "Step-by-step guide to configuring VS Code, Node.js, and npm for React development.",
-    attachments: [
-      {
-        id: "a1",
-        kind: "url",
-        value: "https://nodejs.org",
-        label: "Node.js Download",
-      },
-    ],
-  },
-  {
-    id: "3",
-    title: "Component Architecture Diagram",
-    type: "Image",
-    imageUrl: "https://example.com/diagram.png",
-    description:
-      "Visual reference for understanding component hierarchy and data flow in large apps.",
-    attachments: [],
-  },
-];
 
 function emptyLesson(): Lesson {
   return {
@@ -667,52 +630,41 @@ interface AttendeeDialogProps {
   open: boolean;
   onClose: () => void;
   courseId: string;
-  actor: any;
 }
 
-function AddAttendeesDialog({
-  open,
-  onClose,
-  courseId,
-  actor,
-}: AttendeeDialogProps) {
+function AddAttendeesDialog({ open, onClose, courseId }: AttendeeDialogProps) {
   const [email, setEmail] = useState("");
   const [enrolling, setEnrolling] = useState(false);
   const [enrollError, setEnrollError] = useState<string | null>(null);
   const [enrollSuccess, setEnrollSuccess] = useState(false);
-  const [attendees, setAttendees] = useState<any[]>([]);
-  const [loadingAttendees, setLoadingAttendees] = useState(false);
+  const [, forceUpdate] = useState(0);
 
   const isNewCourse = courseId === "new";
 
-  const fetchAttendees = async () => {
-    if (!actor || isNewCourse) return;
-    setLoadingAttendees(true);
-    try {
-      const result = await actor.getCourseAttendees(BigInt(courseId));
-      setAttendees(result);
-    } catch {
-      // ignore
-    } finally {
-      setLoadingAttendees(false);
-    }
-  };
+  const attendees = isNewCourse
+    ? []
+    : localDb.getEnrollmentsByCourse(courseId).flatMap((e) => {
+        const user = localDb.getUserById(e.userId);
+        return user
+          ? [{ id: user.id, name: user.name, email: user.email }]
+          : [];
+      });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional
-  useEffect(() => {
-    if (open) fetchAttendees();
-  }, [open, actor, courseId]);
-
-  const handleEnroll = async () => {
-    if (!actor || !email.trim() || isNewCourse) return;
+  const handleEnroll = () => {
+    if (!email.trim() || isNewCourse) return;
     setEnrolling(true);
     setEnrollError(null);
     setEnrollSuccess(false);
     try {
-      await actor.enrollLearnerByEmail(BigInt(courseId), email.trim());
+      const user = localDb.getUserByEmail(email.trim());
+      if (!user) {
+        setEnrollError("No user found with that email address.");
+        return;
+      }
+      localDb.enrollUser(user.id, courseId);
       setEnrollSuccess(true);
       setEmail("");
-      fetchAttendees();
+      forceUpdate((n) => n + 1);
     } catch (e: any) {
       setEnrollError(e?.message ?? "Failed to enroll learner.");
     } finally {
@@ -795,15 +747,7 @@ function AddAttendeesDialog({
             <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">
               Enrolled Attendees
             </h4>
-            {loadingAttendees ? (
-              <div
-                className="flex items-center gap-2 text-sm text-muted-foreground py-4"
-                data-ocid="attendees.loading_state"
-              >
-                <span className="w-4 h-4 border-2 border-muted border-t-primary rounded-full animate-spin" />
-                Loading attendees…
-              </div>
-            ) : attendees.length === 0 ? (
+            {attendees.length === 0 ? (
               <div
                 className="text-sm text-muted-foreground text-center py-6 border border-dashed rounded-lg"
                 data-ocid="attendees.empty_state"
@@ -861,23 +805,17 @@ function ContactAttendeesDialog({
   open,
   onClose,
   courseId,
-  actor,
 }: AttendeeDialogProps) {
-  const [attendees, setAttendees] = useState<any[]>([]);
-  const [loadingAttendees, setLoadingAttendees] = useState(false);
-
   const isNewCourse = courseId === "new";
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional
-  useEffect(() => {
-    if (!open || !actor || isNewCourse) return;
-    setLoadingAttendees(true);
-    actor
-      .getCourseAttendees(BigInt(courseId))
-      .then((r: any[]) => setAttendees(r))
-      .catch(() => {})
-      .finally(() => setLoadingAttendees(false));
-  }, [open, actor, courseId]);
+  const attendees = isNewCourse
+    ? []
+    : localDb.getEnrollmentsByCourse(courseId).flatMap((e) => {
+        const user = localDb.getUserById(e.userId);
+        return user
+          ? [{ id: user.id, name: user.name, email: user.email }]
+          : [];
+      });
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -923,15 +861,7 @@ function ContactAttendeesDialog({
             <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">
               Enrolled Attendees
             </h4>
-            {loadingAttendees ? (
-              <div
-                className="flex items-center gap-2 text-sm text-muted-foreground py-4"
-                data-ocid="contact.loading_state"
-              >
-                <span className="w-4 h-4 border-2 border-muted border-t-primary rounded-full animate-spin" />
-                Loading attendees…
-              </div>
-            ) : attendees.length === 0 ? (
+            {attendees.length === 0 ? (
               <div
                 className="text-sm text-muted-foreground text-center py-4 border border-dashed rounded-lg"
                 data-ocid="contact.empty_state"
@@ -1021,49 +951,53 @@ export default function CourseEditPage() {
   const navigate = useNavigate();
   const params = useParams({ strict: false }) as { courseId?: string };
   const courseId = params.courseId ?? "new";
-  const { actor } = useActor();
   const [saving, setSaving] = useState(false);
 
-  const { data: allCourses } = useQuery({
-    queryKey: ["courses"],
-    queryFn: async () => (actor ? actor.getCourses() : []),
-    enabled: !!actor,
-  });
+  // Load course from localDb on mount
+  const existingCourse =
+    courseId !== "new" ? localDb.getCourseById(courseId) : undefined;
 
-  const [form, setForm] = useState<CourseFormState>({
-    title: "Introduction to React & Modern Hooks",
-    tags: "React, JavaScript, Frontend",
+  const [form, setForm] = useState<CourseFormState>(() => ({
+    title: existingCourse?.title ?? "New Course",
+    tags: existingCourse?.tags?.join(", ") ?? "",
     website: "",
     responsiblePerson: "",
-    published: false,
-    imageUrl: null,
-  });
+    published: existingCourse?.isPublished ?? false,
+    imageUrl: existingCourse?.coverImage ?? null,
+  }));
 
-  const [courseOptions, setCourseOptions] = useState({
-    visibility: "everyone" as "everyone" | "signed_in",
-    accessRule: "open" as "open" | "invitation" | "payment",
-    price: "",
+  const [courseOptions, setCourseOptions] = useState(() => ({
+    visibility: (existingCourse?.visibility ?? "everyone") as
+      | "everyone"
+      | "signed_in",
+    accessRule: (existingCourse?.accessRule ?? "open") as
+      | "open"
+      | "invitation"
+      | "payment",
+    price: existingCourse?.price?.toString() ?? "",
     courseAdmin: "",
-  });
+  }));
 
-  const [lessons, setLessons] = useState<Lesson[]>(SEED_LESSONS);
+  const mapLcLessonsToLocal = (lcLessons: localDb.LcLesson[]): Lesson[] =>
+    lcLessons.map((l) => ({
+      id: l.id,
+      title: l.title,
+      type: (l.type === "Quiz" ? "Video" : l.type) as Lesson["type"],
+      videoUrl: l.videoUrl,
+      documentFile: l.documentUrl,
+      imageUrl: l.imageUrl,
+      description: l.description ?? "",
+      attachments: [],
+    }));
+
+  const [lessons, setLessons] = useState<Lesson[]>(() =>
+    existingCourse ? mapLcLessonsToLocal(existingCourse.lessons) : [],
+  );
   const [editorOpen, setEditorOpen] = useState(false);
   const [showAddAttendees, setShowAddAttendees] = useState(false);
   const [showContactAttendees, setShowContactAttendees] = useState(false);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (!allCourses) return;
-    const c = allCourses.find((x) => x.id.toString() === courseId);
-    if (!c) return;
-    setForm((prev) => ({
-      ...prev,
-      title: c.title,
-      tags: (c.tags ?? []).join(", "),
-      published: c.isPublished,
-    }));
-  }, [allCourses, courseId]);
 
   function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -1142,20 +1076,11 @@ export default function CourseEditPage() {
             >
               <Switch
                 checked={form.published}
-                onCheckedChange={async (v) => {
+                onCheckedChange={(v) => {
                   setForm((p) => ({ ...p, published: v }));
-                  if (actor && courseId !== "new") {
+                  if (courseId !== "new") {
                     try {
-                      await actor.updateCourse(BigInt(courseId), {
-                        title: form.title,
-                        tags: form.tags
-                          .split(",")
-                          .map((t) => t.trim())
-                          .filter(Boolean),
-                        lessonCount: BigInt(lessons.length),
-                        duration: BigInt(0),
-                        isPublished: v,
-                      });
+                      localDb.updateCourse(courseId, { isPublished: v });
                       toast.success(
                         v ? "Course published!" : "Course set to draft.",
                       );
@@ -1208,8 +1133,8 @@ export default function CourseEditPage() {
               size="sm"
               className="h-8 text-xs gap-1.5"
               disabled={saving}
-              onClick={async () => {
-                if (!actor || courseId === "new") {
+              onClick={() => {
+                if (courseId === "new") {
                   toast.success("Changes saved!", {
                     description: `"${form.title}" has been updated.`,
                   });
@@ -1217,15 +1142,26 @@ export default function CourseEditPage() {
                 }
                 setSaving(true);
                 try {
-                  await actor.updateCourse(BigInt(courseId), {
+                  const lcLessons: localDb.LcLesson[] = lessons.map((l) => ({
+                    id: l.id,
+                    title: l.title,
+                    type: l.type as localDb.LcLesson["type"],
+                    videoUrl: l.videoUrl,
+                    documentUrl: l.documentFile,
+                    imageUrl: l.imageUrl,
+                    description: l.description,
+                  }));
+                  localDb.updateCourse(courseId, {
                     title: form.title,
                     tags: form.tags
                       .split(",")
                       .map((t) => t.trim())
                       .filter(Boolean),
-                    lessonCount: BigInt(lessons.length),
-                    duration: BigInt(0),
                     isPublished: form.published,
+                    lessons: lcLessons,
+                    visibility: courseOptions.visibility,
+                    accessRule: courseOptions.accessRule,
+                    price: Number.parseFloat(courseOptions.price) || 0,
                   });
                   toast.success("Changes saved!", {
                     description: `"${form.title}" has been updated.`,
@@ -1791,7 +1727,6 @@ export default function CourseEditPage() {
         open={showAddAttendees}
         onClose={() => setShowAddAttendees(false)}
         courseId={courseId}
-        actor={actor}
       />
 
       {/* Contact Attendees Dialog */}
@@ -1799,7 +1734,6 @@ export default function CourseEditPage() {
         open={showContactAttendees}
         onClose={() => setShowContactAttendees(false)}
         courseId={courseId}
-        actor={actor}
       />
 
       <LessonEditorDialog

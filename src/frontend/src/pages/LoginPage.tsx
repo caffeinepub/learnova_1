@@ -2,14 +2,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { GraduationCap, Loader2 } from "lucide-react";
+import { GraduationCap, Loader2, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuthContext } from "../contexts/AuthContext";
-import { useLocalAuth } from "../hooks/useLocalAuth";
 
 export default function LoginPage() {
-  const { login } = useLocalAuth();
-  const { isAuthenticated, role } = useAuthContext();
+  const { login, resetAllAccounts, isAuthenticated, role } = useAuthContext();
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { redirect?: string };
 
@@ -18,17 +16,16 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Redirect already-authenticated users
+  // If already authenticated, redirect to the right dashboard immediately
   useEffect(() => {
-    if (isAuthenticated && role !== "guest") {
-      const destination =
-        search.redirect ||
-        (role === "admin"
-          ? "/instructor/courses"
-          : role === "instructor"
-            ? "/instructor/courses"
-            : "/learner/courses");
-      navigate({ to: destination });
+    if (isAuthenticated) {
+      if (search.redirect) {
+        navigate({ to: search.redirect as any });
+      } else if (role === "admin" || role === "instructor") {
+        navigate({ to: "/instructor/courses" });
+      } else {
+        navigate({ to: "/learner/courses" });
+      }
     }
   }, [isAuthenticated, role, navigate, search.redirect]);
 
@@ -42,16 +39,28 @@ export default function LoginPage() {
     if (!result.success) {
       setError(result.error ?? "Login failed.");
     } else {
-      // Navigate directly using the role returned from login
-      const destination =
-        search.redirect ||
-        (result.role === "admin"
-          ? "/instructor/courses"
-          : result.role === "instructor"
-            ? "/instructor/courses"
-            : "/learner/courses");
-      navigate({ to: destination });
+      if (search.redirect) {
+        navigate({ to: search.redirect as any });
+      } else if (result.role === "admin" || result.role === "instructor") {
+        navigate({ to: "/instructor/courses" });
+      } else {
+        navigate({ to: "/learner/courses" });
+      }
     }
+  };
+
+  const handleResetForSetup = () => {
+    const confirmed = window.confirm(
+      "This will delete all custom accounts (the default admin is kept). Continue?",
+    );
+    if (confirmed) {
+      resetAllAccounts();
+    }
+  };
+
+  const fillAdmin = () => {
+    setEmail("admin@learnova.com");
+    setPassword("admin123");
   };
 
   return (
@@ -81,6 +90,23 @@ export default function LoginPage() {
               trusted decentralized learning platform.
             </p>
           </div>
+          {/* Default admin hint on left panel */}
+          <div className="bg-white/10 rounded-2xl border border-white/20 px-5 py-4 text-left space-y-2">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-violet-200" />
+              <span className="text-sm font-bold text-violet-100">
+                Default Admin Account
+              </span>
+            </div>
+            <div className="space-y-1 text-sm">
+              <p className="text-white/80">
+                <span className="text-white/50">Email:</span> admin@learnova.com
+              </p>
+              <p className="text-white/80">
+                <span className="text-white/50">Password:</span> admin123
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -104,6 +130,23 @@ export default function LoginPage() {
               Sign in to continue your learning journey
             </p>
           </div>
+
+          {/* Default admin credentials hint (mobile / quick fill) */}
+          <button
+            type="button"
+            onClick={fillAdmin}
+            className="w-full flex items-start gap-3 rounded-xl border border-indigo-200 bg-indigo-50 dark:border-indigo-800 dark:bg-indigo-950/30 px-4 py-3 text-left hover:bg-indigo-100 dark:hover:bg-indigo-950/50 transition-colors"
+          >
+            <ShieldCheck className="h-4 w-4 text-indigo-600 dark:text-indigo-400 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-indigo-800 dark:text-indigo-300">
+                Default Admin — click to fill
+              </p>
+              <p className="text-xs text-indigo-600/80 dark:text-indigo-400/80">
+                Email: admin@learnova.com &nbsp;|&nbsp; Password: admin123
+              </p>
+            </div>
+          </button>
 
           <form
             onSubmit={handleSubmit}
@@ -187,6 +230,20 @@ export default function LoginPage() {
               Create an account
             </Button>
           </Link>
+
+          <div className="pt-2 flex flex-col items-center gap-1">
+            <div className="w-full border-t border-border/40" />
+            <p className="text-xs text-muted-foreground/60 pt-2">
+              <button
+                type="button"
+                onClick={handleResetForSetup}
+                className="underline underline-offset-2 hover:text-muted-foreground transition-colors"
+                data-ocid="login.delete_button"
+              >
+                Reset custom accounts
+              </button>
+            </p>
+          </div>
         </div>
       </div>
     </div>

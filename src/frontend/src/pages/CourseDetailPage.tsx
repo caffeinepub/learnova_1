@@ -12,8 +12,6 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { useActor } from "@/hooks/useActor";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import {
   ArrowLeft,
@@ -32,41 +30,8 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { UserRole } from "../backend";
-import type {
-  Badge as BadgeType,
-  Course,
-  Enrollment,
-  LessonProgress,
-  Review,
-} from "../backend.d";
 import { useAuthContext } from "../contexts/AuthContext";
-
-interface LessonData {
-  id: string;
-  title: string;
-  type: "Video" | "Document" | "Image" | "Quiz";
-  url?: string;
-  quizId?: string;
-}
-
-const SAMPLE_LESSONS: LessonData[] = [
-  {
-    id: "l1",
-    title: "Introduction & Overview",
-    type: "Video",
-    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-  },
-  { id: "l2", title: "Core Concepts", type: "Document" },
-  { id: "l3", title: "Visual Reference Guide", type: "Image" },
-  { id: "l4", title: "Knowledge Check", type: "Quiz", quizId: "q1" },
-  {
-    id: "l5",
-    title: "Advanced Topics",
-    type: "Video",
-    url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-  },
-];
+import * as localDb from "../lib/localDb";
 
 const TYPE_ICONS: Record<string, React.ReactNode> = {
   Video: <Film className="h-3.5 w-3.5" />,
@@ -129,56 +94,37 @@ function StarRating({
 export default function CourseDetailPage() {
   const { courseId } = useParams({ strict: false }) as { courseId: string };
   const navigate = useNavigate();
-  const { actor, isFetching } = useActor();
-  const { profile } = useAuthContext();
-  const qc = useQueryClient();
-  const enabled = !!actor && !isFetching;
+  const { role, userId, userName, isAuthenticated } = useAuthContext();
 
   const [completing, setCompleting] = useState(false);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
-  const [completionRewards, setCompletionRewards] = useState<{
-    points: bigint;
-    badges: BadgeType[];
-  } | null>(null);
+  const [completionPoints, setCompletionPoints] = useState(0);
   const [enrolling, setEnrolling] = useState(false);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
   const [submittingReview, setSubmittingReview] = useState(false);
   const [lessonSearch, setLessonSearch] = useState("");
+  const [, forceUpdate] = useState(0);
 
-  const courseIdBig = BigInt(courseId);
+  const course = localDb.getCourseById(courseId);
+  const isInstructorOrAdmin = role === "admin" || role === "instructor";
 
-  const { data: courses } = useQuery<Course[]>({
-    queryKey: ["courses"],
-    queryFn: async () => (actor ? actor.getCourses() : []),
-    enabled,
-  });
+  if (!course) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+        <BookOpen className="w-12 h-12 text-muted-foreground" />
+        <h2 className="text-xl font-semibold">Course Not Found</h2>
+        <Button
+          variant="outline"
+          onClick={() => navigate({ to: "/learner/courses" })}
+        >
+          Back to My Courses
+        </Button>
+      </div>
+    );
+  }
 
-  const { data: lessonProgress } = useQuery<LessonProgress[]>({
-    queryKey: ["lessonProgress", courseId],
-    queryFn: async () => (actor ? actor.getMyLessonProgress(courseIdBig) : []),
-    enabled,
-    staleTime: 0,
-  });
-
-  const { data: completions } = useQuery<Enrollment[]>({
-    queryKey: ["myCourseCompletions"],
-    queryFn: async () => (actor ? actor.getMyCourseCompletions() : []),
-    enabled,
-  });
-
-  const { data: reviews, refetch: refetchReviews } = useQuery<Review[]>({
-    queryKey: ["courseReviews", courseId],
-    queryFn: async () => (actor ? actor.getCourseReviews(courseIdBig) : []),
-    enabled,
-  });
-
-  const course = (courses ?? []).find((c) => c.id.toString() === courseId);
-  const isInstructorOrAdmin =
-    profile?.role === UserRole.admin ||
-    (profile?.role as string) === "instructor";
-
-  if (course && course.isPublished === false && !isInstructorOrAdmin) {
+  if (!course.isPublished && !isInstructorOrAdmin) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <Lock className="w-12 h-12 text-muted-foreground" />
@@ -196,23 +142,13 @@ export default function CourseDetailPage() {
     );
   }
 
-  const lessons: LessonData[] = (() => {
-    try {
-      const raw = localStorage.getItem(`learnova_lessons_${courseId}`);
-      const parsed = raw ? JSON.parse(raw) : null;
-      return parsed && parsed.length > 0 ? parsed : SAMPLE_LESSONS;
-    } catch {
-      return SAMPLE_LESSONS;
-    }
-  })();
-
-  const isEnrolled = (completions ?? []).some(
-    (e) => e.courseId.toString() === courseId,
-  );
-  const completedIds = new Set(
-    (lessonProgress ?? []).filter((p) => p.isCompleted).map((p) => p.lessonId),
-  );
-  const totalLessonCount = Number(course?.lessonCount ?? lessons.length);
+  const lessons = course.lessons;
+  const enrollment = userId
+    ? localDb.getEnrollment(userId, courseId)
+    : undefined;
+  const isEnrolled = !!enrollment;
+  const completedIds = new Set(enrollment?.completedLessons ?? []);
+  const totalLessonCount = lessons.length;
   const progressPct =
     totalLessonCount > 0
       ? Math.round((completedIds.size / totalLessonCount) * 100)
@@ -220,21 +156,37 @@ export default function CourseDetailPage() {
   const allComplete =
     completedIds.size >= totalLessonCount && totalLessonCount > 0;
 
-  const alreadyReviewed = (reviews ?? []).some(
-    (r) => r.principal?.toString() === profile?.principal?.toString(),
-  );
+  const reviews = localDb.getReviews(courseId);
+  const alreadyReviewed = userId
+    ? localDb.hasReviewed(userId, courseId)
+    : false;
+  const avgRating =
+    reviews.length > 0
+      ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
+      : 0;
 
   const filteredLessons = lessons.filter((l) =>
     l.title.toLowerCase().includes(lessonSearch.toLowerCase()),
   );
 
-  const handleEnroll = async () => {
-    if (!actor) return;
+  const gradientIdx =
+    courseId.split("").reduce((a, c) => a + c.charCodeAt(0), 0) %
+    GRADIENTS.length;
+  const initial = course.title.trim()[0]?.toUpperCase() ?? "C";
+
+  const handleEnroll = () => {
+    if (!userId) {
+      navigate({
+        to: "/login",
+        search: { redirect: `/learner/courses/${courseId}` },
+      });
+      return;
+    }
     setEnrolling(true);
     try {
-      await actor.enrollCourse({ courseId: courseIdBig });
-      qc.invalidateQueries({ queryKey: ["myCourseCompletions"] });
+      localDb.enrollUser(userId, courseId);
       toast.success("Enrolled successfully!");
+      forceUpdate((n) => n + 1);
     } catch {
       toast.error("Failed to enroll");
     } finally {
@@ -242,20 +194,15 @@ export default function CourseDetailPage() {
     }
   };
 
-  const handleComplete = async () => {
-    if (!actor) return;
+  const handleComplete = () => {
+    if (!userId) return;
     setCompleting(true);
     try {
-      await actor.completeCourse(courseIdBig);
-      const [pts, bdgs] = await Promise.all([
-        actor.getMyPoints(),
-        actor.getMyBadges(),
-      ]);
-      setCompletionRewards({ points: pts, badges: bdgs });
+      localDb.completeCourse(userId, courseId);
+      const pts = localDb.addPoints(userId, 50);
+      setCompletionPoints(pts);
       setShowCompletionModal(true);
-      qc.invalidateQueries({ queryKey: ["myCourseCompletions"] });
-      qc.invalidateQueries({ queryKey: ["myPoints"] });
-      qc.invalidateQueries({ queryKey: ["myBadges"] });
+      forceUpdate((n) => n + 1);
     } catch {
       toast.error("Failed to complete course");
     } finally {
@@ -263,45 +210,26 @@ export default function CourseDetailPage() {
     }
   };
 
-  const handleSubmitReview = async () => {
-    if (!actor) return;
+  const handleSubmitReview = () => {
+    if (!userId || !userName) return;
     setSubmittingReview(true);
     try {
-      await actor.submitReview(
-        courseIdBig,
-        BigInt(reviewRating),
+      localDb.addReview(
+        courseId,
+        userId,
+        userName,
+        reviewRating,
         reviewComment,
       );
       toast.success("Review submitted!");
       setReviewComment("");
-      refetchReviews();
+      forceUpdate((n) => n + 1);
     } catch {
       toast.error("Failed to submit review");
     } finally {
       setSubmittingReview(false);
     }
   };
-
-  const avgRating =
-    (reviews ?? []).length > 0
-      ? (reviews ?? []).reduce((sum, r) => sum + Number(r.rating), 0) /
-        (reviews ?? []).length
-      : 0;
-
-  // Gradient index based on courseId
-  const gradientIdx =
-    Number.parseInt(courseId.replace(/\D/g, "") || "0", 10) % GRADIENTS.length;
-  const initial = course?.title.trim()[0]?.toUpperCase() ?? "C";
-
-  if (!course) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-pulse text-muted-foreground">
-          Loading course...
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -322,7 +250,7 @@ export default function CourseDetailPage() {
           >
             <h1 className="text-3xl font-bold mb-3">{course.title}</h1>
             <div className="flex flex-wrap gap-2 mb-4">
-              {(course.tags ?? []).map((tag) => (
+              {course.tags.map((tag) => (
                 <Badge
                   key={tag}
                   className="bg-white/20 text-white border-white/30"
@@ -333,7 +261,7 @@ export default function CourseDetailPage() {
             </div>
             <div className="flex items-center gap-4 text-white/70 text-sm">
               <span className="flex items-center gap-1">
-                <Clock className="h-4 w-4" /> {Number(course.duration)} hrs
+                <Clock className="h-4 w-4" /> {course.duration} hrs
               </span>
               <span className="flex items-center gap-1">
                 <BookOpen className="h-4 w-4" /> {lessons.length} lessons
@@ -344,7 +272,6 @@ export default function CourseDetailPage() {
       </div>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Tabs */}
         <Tabs defaultValue="overview">
           <div className="overflow-x-auto mb-6">
             <TabsList data-ocid="course_detail.tab" className="w-max">
@@ -353,10 +280,8 @@ export default function CourseDetailPage() {
             </TabsList>
           </div>
 
-          {/* ── Overview Tab ────────────────────────────────────────── */}
           <TabsContent value="overview">
             <div className="space-y-6">
-              {/* Cover image block */}
               <motion.div
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -370,7 +295,6 @@ export default function CourseDetailPage() {
                   </span>
                   <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
                 </div>
-
                 <div className="mt-4">
                   <h2 className="text-2xl font-bold text-foreground mb-1">
                     {course.title}
@@ -385,32 +309,31 @@ export default function CourseDetailPage() {
               <motion.div
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35, delay: 0.08 }}
+                transition={{ duration: 0.35, delay: 0.06 }}
                 className="space-y-3"
               >
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-foreground">
-                    Progress
-                  </span>
-                  <span className="text-sm font-bold text-primary">
-                    {progressPct}% Completed
-                  </span>
-                </div>
-                <Progress value={progressPct} className="h-3" />
-
-                {/* Stat pills */}
+                {isEnrolled && (
+                  <div>
+                    <div className="flex justify-between text-sm mb-1.5">
+                      <span className="font-medium">Progress</span>
+                      <span className="font-bold text-primary">
+                        {progressPct}%
+                      </span>
+                    </div>
+                    <Progress value={progressPct} className="h-2" />
+                  </div>
+                )}
                 <div className="flex gap-2 flex-wrap">
                   <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-muted text-muted-foreground px-3 py-1.5 rounded-full border border-border">
-                    <BookOpen className="h-3 w-3" />
-                    Total: {totalLessonCount}
+                    <BookOpen className="h-3 w-3" /> Total: {totalLessonCount}
                   </span>
                   <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-full border border-emerald-200">
-                    <CheckCircle2 className="h-3 w-3" />
-                    Completed: {completedIds.size}
+                    <CheckCircle2 className="h-3 w-3" /> Completed:{" "}
+                    {completedIds.size}
                   </span>
                   <span className="inline-flex items-center gap-1.5 text-xs font-medium bg-rose-50 text-rose-700 px-3 py-1.5 rounded-full border border-rose-200">
-                    <Clock className="h-3 w-3" />
-                    Incomplete: {totalLessonCount - completedIds.size}
+                    <Clock className="h-3 w-3" /> Incomplete:{" "}
+                    {totalLessonCount - completedIds.size}
                   </span>
                 </div>
               </motion.div>
@@ -434,7 +357,14 @@ export default function CourseDetailPage() {
 
               {/* Lesson list */}
               <div className="space-y-2">
-                {filteredLessons.length === 0 ? (
+                {lessons.length === 0 ? (
+                  <div
+                    data-ocid="lessons.empty_state"
+                    className="text-center py-8 text-muted-foreground text-sm"
+                  >
+                    No lessons yet. Click Add Content to get started.
+                  </div>
+                ) : filteredLessons.length === 0 ? (
                   <div
                     data-ocid="lessons.empty_state"
                     className="text-center py-8 text-muted-foreground text-sm"
@@ -473,7 +403,7 @@ export default function CourseDetailPage() {
                           </p>
                         </div>
                         <span
-                          className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${TYPE_COLORS[lesson.type]}`}
+                          className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${TYPE_COLORS[lesson.type] ?? "bg-muted text-muted-foreground"}`}
                         >
                           {TYPE_ICONS[lesson.type]}
                           {lesson.type}
@@ -493,7 +423,7 @@ export default function CourseDetailPage() {
 
               {/* Enroll / Complete Course button */}
               <div className="flex gap-2 pt-2">
-                {!isEnrolled ? (
+                {!isEnrolled && isAuthenticated ? (
                   <Button
                     data-ocid="course_detail.primary_button"
                     onClick={handleEnroll}
@@ -501,6 +431,19 @@ export default function CourseDetailPage() {
                     className="w-full sm:w-auto"
                   >
                     {enrolling ? "Enrolling..." : "Enroll Now"}
+                  </Button>
+                ) : !isAuthenticated ? (
+                  <Button
+                    data-ocid="course_detail.primary_button"
+                    onClick={() =>
+                      navigate({
+                        to: "/login",
+                        search: { redirect: `/learner/courses/${courseId}` },
+                      })
+                    }
+                    className="w-full sm:w-auto"
+                  >
+                    Sign In to Enroll
                   </Button>
                 ) : allComplete ? (
                   <Button
@@ -517,10 +460,8 @@ export default function CourseDetailPage() {
             </div>
           </TabsContent>
 
-          {/* ── Reviews Tab ─────────────────────────────────────────── */}
           <TabsContent value="reviews">
             <div className="space-y-6">
-              {/* Aggregate */}
               <Card>
                 <CardContent className="pt-5 flex items-center gap-6">
                   <div className="text-center">
@@ -529,13 +470,12 @@ export default function CourseDetailPage() {
                     </div>
                     <StarRating value={Math.round(avgRating)} readonly />
                     <div className="text-sm text-muted-foreground mt-1">
-                      {(reviews ?? []).length} reviews
+                      {reviews.length} reviews
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              {/* Submit */}
               {isEnrolled && !alreadyReviewed && (
                 <Card>
                   <CardContent className="pt-5 space-y-3">
@@ -562,8 +502,7 @@ export default function CourseDetailPage() {
                 </Card>
               )}
 
-              {/* List */}
-              {(reviews ?? []).length === 0 ? (
+              {reviews.length === 0 ? (
                 <div
                   data-ocid="reviews.empty_state"
                   className="text-center py-10 text-muted-foreground"
@@ -571,32 +510,21 @@ export default function CourseDetailPage() {
                   No reviews yet. Be the first to add one.
                 </div>
               ) : (
-                (reviews ?? []).map((review, idx) => (
-                  <Card
-                    key={review.principal?.toString() ?? idx}
-                    data-ocid={`reviews.item.${idx + 1}`}
-                  >
+                reviews.map((review, idx) => (
+                  <Card key={review.id} data-ocid={`reviews.item.${idx + 1}`}>
                     <CardContent className="pt-4">
                       <div className="flex items-start gap-3">
                         <Avatar className="h-8 w-8">
-                          <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                            {review.principal
-                              ?.toString()
-                              .slice(0, 2)
-                              .toUpperCase() ?? "?"}
+                          <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                            {review.authorName.slice(0, 2).toUpperCase()}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
-                            <StarRating
-                              value={Number(review.rating)}
-                              readonly
-                            />
-                            <span className="text-xs text-muted-foreground">
-                              {new Date(
-                                Number(review.createdAt) / 1_000_000,
-                              ).toLocaleDateString()}
+                            <span className="font-medium text-sm">
+                              {review.authorName}
                             </span>
+                            <StarRating value={review.rating} readonly />
                           </div>
                           <p className="text-sm">{review.comment}</p>
                         </div>
@@ -630,27 +558,12 @@ export default function CourseDetailPage() {
               <div className="space-y-3 py-2">
                 <div className="bg-primary/10 rounded-xl p-4">
                   <div className="text-3xl font-bold text-primary">
-                    {Number(completionRewards?.points ?? 0).toLocaleString()}
+                    {completionPoints.toLocaleString()}
                   </div>
                   <div className="text-sm text-muted-foreground">
                     Total Points Earned
                   </div>
                 </div>
-                {(completionRewards?.badges ?? []).length > 0 && (
-                  <div>
-                    <p className="font-medium mb-2">Badges Awarded</p>
-                    <div className="flex flex-wrap gap-2 justify-center">
-                      {(completionRewards?.badges ?? []).map((b) => (
-                        <Badge
-                          key={b.name}
-                          className="bg-amber-100 text-amber-800"
-                        >
-                          ⭐ {b.name}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
               <Button
                 data-ocid="completion.close_button"

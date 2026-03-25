@@ -18,13 +18,43 @@ interface AuthContextValue {
   setShowRegisterModal: (v: boolean) => void;
   refetchProfile: () => void;
   logout: () => void;
+  login: (
+    email: string,
+    password: string,
+  ) => {
+    success: boolean;
+    role?: "admin" | "instructor" | "learner";
+    error?: string;
+  };
+  signup: (
+    email: string,
+    password: string,
+    name: string,
+    role: "learner" | "instructor",
+  ) => {
+    success: boolean;
+    role?: "admin" | "instructor" | "learner";
+    error?: string;
+  };
+  resetAllAccounts: () => void;
   updateLocalUser: (updates: { name?: string; email?: string }) => void;
+  userId: string | null;
+  userName: string | null;
+  userEmail: string | null;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { currentUser, isInitialized, logout, updateUser } = useLocalAuth();
+  const {
+    currentUser,
+    isInitialized,
+    logout,
+    updateUser,
+    login,
+    signup,
+    resetAllAccounts,
+  } = useLocalAuth();
 
   const isAuthenticated = !!currentUser;
 
@@ -63,7 +93,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setShowRegisterModal: () => {},
         refetchProfile: () => {},
         logout,
+        login,
+        signup,
+        resetAllAccounts,
         updateLocalUser: updateUser,
+        userId: currentUser?.id ?? null,
+        userName: currentUser?.name ?? null,
+        userEmail: currentUser?.email ?? null,
       }}
     >
       {children}

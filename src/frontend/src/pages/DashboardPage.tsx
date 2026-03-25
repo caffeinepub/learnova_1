@@ -13,9 +13,13 @@ export default function DashboardPage() {
       navigate({ to: "/login" });
       return;
     }
-    if (role === "admin") navigate({ to: "/admin" });
-    else if (role === "instructor") navigate({ to: "/instructor" });
-    else navigate({ to: "/learner" });
+    if (role === "admin") {
+      navigate({ to: "/instructor/courses" });
+    } else if (role === "instructor") {
+      navigate({ to: "/instructor/courses" });
+    } else {
+      navigate({ to: "/learner/courses" });
+    }
   }, [role, isFetched, isAuthenticated, navigate]);
 
   return (

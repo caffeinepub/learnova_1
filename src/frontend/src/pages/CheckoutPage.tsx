@@ -2,8 +2,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useActor } from "@/hooks/useActor";
-import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import {
   ArrowLeft,
@@ -14,8 +12,8 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
-import type { Course, Enrollment } from "../backend.d";
 import { useAuthContext } from "../contexts/AuthContext";
+import * as localDb from "../lib/localDb";
 
 const GRADIENTS = [
   "from-violet-500 via-indigo-600 to-indigo-700",
@@ -25,18 +23,6 @@ const GRADIENTS = [
   "from-orange-500 via-amber-500 to-red-600",
   "from-pink-500 via-rose-500 to-rose-700",
 ];
-
-function getCourseOptions(courseId: string): {
-  accessRule?: string;
-  price?: number;
-} {
-  try {
-    const raw = localStorage.getItem(`learnova_course_options_${courseId}`);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
 
 function formatCardNumber(value: string): string {
   const digits = value.replace(/\D/g, "").slice(0, 16);
@@ -52,11 +38,8 @@ function formatExpiry(value: string): string {
 export default function CheckoutPage() {
   const { courseId } = useParams({ strict: false }) as { courseId: string };
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuthContext();
-  const { actor, isFetching } = useActor();
-  const enabled = !!actor && !isFetching;
+  const { isAuthenticated, userId } = useAuthContext();
 
-  // Form state
   const [cardholderName, setCardholderName] = useState("");
   const [cardNumber, setCardNumber] = useState("");
   const [expiry, setExpiry] = useState("");
@@ -64,7 +47,6 @@ export default function CheckoutPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [processing, setProcessing] = useState(false);
 
-  // Redirect if not authenticated
   useEffect(() => {
     if (!isAuthenticated) {
       navigate({
@@ -74,39 +56,22 @@ export default function CheckoutPage() {
     }
   }, [isAuthenticated, courseId, navigate]);
 
-  // Fetch courses
-  const { data: courses } = useQuery<Course[]>({
-    queryKey: ["courses"],
-    queryFn: () => (actor ? actor.getCourses() : Promise.resolve([])),
-    enabled,
-  });
+  const course = localDb.getCourseById(courseId);
+  const isEnrolled = userId ? !!localDb.getEnrollment(userId, courseId) : false;
 
-  // Fetch enrollments
-  const { data: enrollments } = useQuery<Enrollment[]>({
-    queryKey: ["myCourseCompletions"],
-    queryFn: () =>
-      actor ? actor.getMyCourseCompletions() : Promise.resolve([]),
-    enabled,
-  });
-
-  const course = courses?.find((c) => c.id.toString() === courseId);
-  const opts = getCourseOptions(courseId);
-  const coverImage = localStorage.getItem(`learnova_cover_${courseId}`);
-  const price = opts.price ?? 0;
-  const isEnrolled = (enrollments ?? []).some(
-    (e) => e.courseId.toString() === courseId,
-  );
-
-  // Redirect if already enrolled
   useEffect(() => {
     if (isEnrolled) {
       navigate({ to: `/learner/courses/${courseId}` });
     }
   }, [isEnrolled, courseId, navigate]);
 
-  const courseInitial = course?.title?.trim()[0]?.toUpperCase() ?? "C";
+  const price = course?.price ?? 0;
   const gradientClass =
-    GRADIENTS[Number(courseId) % GRADIENTS.length] ?? GRADIENTS[0];
+    GRADIENTS[
+      courseId.split("").reduce((a, c) => a + c.charCodeAt(0), 0) %
+        GRADIENTS.length
+    ] ?? GRADIENTS[0];
+  const courseInitial = course?.title?.trim()[0]?.toUpperCase() ?? "C";
 
   function validate(): boolean {
     const e: Record<string, string> = {};
@@ -121,15 +86,11 @@ export default function CheckoutPage() {
   }
 
   async function handlePay() {
-    if (!validate() || !actor) return;
+    if (!validate() || !userId) return;
     setProcessing(true);
     try {
       await new Promise((res) => setTimeout(res, 1500));
-      try {
-        await actor.enrollCourse({ courseId: BigInt(courseId) });
-      } catch {
-        // already enrolled or other — treat as success
-      }
+      localDb.enrollUser(userId, courseId);
       navigate({ to: `/learner/courses/${courseId}` });
     } finally {
       setProcessing(false);
@@ -153,7 +114,6 @@ export default function CheckoutPage() {
         </div>
       </div>
 
-      {/* Main */}
       <div className="flex-1 flex items-center justify-center py-10 px-4">
         <motion.div
           initial={{ opacity: 0, y: 24 }}
@@ -166,17 +126,9 @@ export default function CheckoutPage() {
             <div
               className={`h-28 bg-gradient-to-br ${gradientClass} relative flex items-center justify-center overflow-hidden`}
             >
-              {coverImage ? (
-                <img
-                  src={coverImage}
-                  alt={course?.title ?? "Course"}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <span className="text-7xl font-black text-white/20 select-none">
-                  {courseInitial}
-                </span>
-              )}
+              <span className="text-7xl font-black text-white/20 select-none">
+                {courseInitial}
+              </span>
               <div className="absolute inset-0 bg-black/20" />
             </div>
             <CardContent className="px-5 py-4 flex items-center justify-between gap-3">
@@ -211,7 +163,6 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-              {/* Cardholder Name */}
               <div className="space-y-1.5">
                 <Label
                   htmlFor="cardholder-name"
@@ -241,7 +192,6 @@ export default function CheckoutPage() {
                 )}
               </div>
 
-              {/* Card Number */}
               <div className="space-y-1.5">
                 <Label htmlFor="card-number" className="text-sm font-medium">
                   Card Number
@@ -258,7 +208,9 @@ export default function CheckoutPage() {
                       if (errors.cardNumber)
                         setErrors((prev) => ({ ...prev, cardNumber: "" }));
                     }}
-                    className={`pr-10 font-mono tracking-widest ${errors.cardNumber ? "border-destructive" : ""}`}
+                    className={`pr-10 font-mono tracking-widest ${
+                      errors.cardNumber ? "border-destructive" : ""
+                    }`}
                   />
                   <CreditCard className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 </div>
@@ -272,7 +224,6 @@ export default function CheckoutPage() {
                 )}
               </div>
 
-              {/* Expiry + CVV */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="expiry" className="text-sm font-medium">
@@ -332,7 +283,6 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-              {/* Pay button */}
               <Button
                 data-ocid="checkout.primary_button"
                 className="w-full font-bold text-sm h-11 mt-1"

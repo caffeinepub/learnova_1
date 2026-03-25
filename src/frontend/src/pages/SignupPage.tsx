@@ -2,16 +2,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
-import { BookOpen, GraduationCap, Loader2, Shield, Users } from "lucide-react";
+import { BookOpen, GraduationCap, Loader2, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuthContext } from "../contexts/AuthContext";
-import { useLocalAuth } from "../hooks/useLocalAuth";
 
 type RoleChoice = "instructor" | "learner";
 
 export default function SignupPage() {
-  const { signup, isFirstUser } = useLocalAuth();
-  const { isAuthenticated, role } = useAuthContext();
+  const { signup, isAuthenticated, role } = useAuthContext();
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { redirect?: string };
 
@@ -22,18 +20,16 @@ export default function SignupPage() {
   const [selectedRole, setSelectedRole] = useState<RoleChoice>("learner");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [firstUser] = useState(() => isFirstUser());
 
   useEffect(() => {
     if (isAuthenticated && role !== "guest") {
-      const destination =
-        search.redirect ||
-        (role === "admin"
-          ? "/admin"
-          : role === "instructor"
-            ? "/instructor/courses"
-            : "/learner/courses");
-      navigate({ to: destination });
+      if (search.redirect) {
+        navigate({ to: search.redirect as any });
+      } else if (role === "admin" || role === "instructor") {
+        navigate({ to: "/instructor/courses" });
+      } else {
+        navigate({ to: "/learner/courses" });
+      }
     }
   }, [isAuthenticated, role, navigate, search.redirect]);
 
@@ -55,14 +51,13 @@ export default function SignupPage() {
     if (!result.success) {
       setError(result.error ?? "Signup failed.");
     } else {
-      const destination =
-        search.redirect ||
-        (result.role === "admin"
-          ? "/admin"
-          : result.role === "instructor"
-            ? "/instructor/courses"
-            : "/learner/courses");
-      navigate({ to: destination });
+      if (search.redirect) {
+        navigate({ to: search.redirect as any });
+      } else if (result.role === "admin" || result.role === "instructor") {
+        navigate({ to: "/instructor/courses" });
+      } else {
+        navigate({ to: "/learner/courses" });
+      }
     }
   };
 
@@ -135,19 +130,6 @@ export default function SignupPage() {
             </p>
           </div>
 
-          {firstUser && (
-            <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 px-4 py-3">
-              <Shield className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
-              <p className="text-sm text-amber-800 dark:text-amber-300">
-                <span className="font-semibold">
-                  First account gets Admin access.
-                </span>{" "}
-                Since no accounts exist yet, this signup will automatically
-                create the Admin account.
-              </p>
-            </div>
-          )}
-
           <form
             onSubmit={handleSubmit}
             className="space-y-4"
@@ -204,29 +186,35 @@ export default function SignupPage() {
               />
             </div>
 
-            {!firstUser && (
-              <div className="space-y-1.5">
-                <Label>I want to join as</Label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedRole("instructor")}
-                    className={`flex items-center justify-center gap-2 rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-all ${selectedRole === "instructor" ? "border-primary bg-primary/8 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}
-                    data-ocid="signup.toggle"
-                  >
-                    <GraduationCap className="h-4 w-4" /> Instructor
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedRole("learner")}
-                    className={`flex items-center justify-center gap-2 rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-all ${selectedRole === "learner" ? "border-primary bg-primary/8 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"}`}
-                    data-ocid="signup.toggle"
-                  >
-                    <Users className="h-4 w-4" /> Learner
-                  </button>
-                </div>
+            <div className="space-y-1.5">
+              <Label>I want to join as</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSelectedRole("instructor")}
+                  className={`flex items-center justify-center gap-2 rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-all ${
+                    selectedRole === "instructor"
+                      ? "border-primary bg-primary/8 text-primary"
+                      : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                  }`}
+                  data-ocid="signup.toggle"
+                >
+                  <GraduationCap className="h-4 w-4" /> Instructor
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedRole("learner")}
+                  className={`flex items-center justify-center gap-2 rounded-xl border-2 px-4 py-3 text-sm font-semibold transition-all ${
+                    selectedRole === "learner"
+                      ? "border-primary bg-primary/8 text-primary"
+                      : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                  }`}
+                  data-ocid="signup.toggle"
+                >
+                  <Users className="h-4 w-4" /> Learner
+                </button>
               </div>
-            )}
+            </div>
 
             {error && <p className="text-sm text-destructive">{error}</p>}
 

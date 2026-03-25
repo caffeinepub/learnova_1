@@ -4,8 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { useActor } from "@/hooks/useActor";
-import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
   BookOpen,
@@ -21,10 +19,11 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useMemo, useState } from "react";
-import type { Badge, Course, Enrollment } from "../backend.d";
 import { useAuthContext } from "../contexts/AuthContext";
+import * as localDb from "../lib/localDb";
+import type { LcCourse } from "../lib/localDb";
 
-// ─── Badge Tier System ───────────────────────────────────────────────────────
+// ─── Badge Tier System ─────────────────────────────────────────────────────────
 const BADGE_TIERS = [
   {
     name: "Starter",
@@ -95,7 +94,6 @@ function getBadgeTier(pts: number) {
   return BADGE_TIERS.findLast((t) => pts >= t.min) ?? BADGE_TIERS[0];
 }
 
-// ─── Gradient palette per course index ───────────────────────────────────────
 const GRADIENTS = [
   "from-violet-500 via-indigo-600 to-indigo-700",
   "from-fuchsia-500 via-purple-600 to-purple-700",
@@ -105,93 +103,33 @@ const GRADIENTS = [
   "from-pink-500 via-rose-500 to-rose-700",
 ];
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 function generateDescription(title: string): string {
   return `Master the fundamentals of ${title} with hands-on exercises and real-world projects.`;
 }
 
-function getCourseOptions(courseId: bigint): {
-  accessRule?: string;
-  price?: number;
-} {
-  try {
-    const raw = localStorage.getItem(`learnova_course_options_${courseId}`);
-    return raw ? JSON.parse(raw) : {};
-  } catch {
-    return {};
-  }
-}
-
-function getLessonCount(courseId: bigint): number {
-  try {
-    const raw = localStorage.getItem(`learnova_lessons_${courseId}`);
-    const lessons = raw ? JSON.parse(raw) : [];
-    return Array.isArray(lessons) ? lessons.length : 0;
-  } catch {
-    return 0;
-  }
-}
-
-// ─── Data hooks ───────────────────────────────────────────────────────────────
-function useLearnerData() {
-  const { actor, isFetching } = useActor();
-  const enabled = !!actor && !isFetching;
-
-  const courses = useQuery<Course[]>({
-    queryKey: ["courses"],
-    queryFn: () => (actor ? actor.getCourses() : Promise.resolve([])),
-    enabled,
-  });
-
-  const completions = useQuery<Enrollment[]>({
-    queryKey: ["myCourseCompletions"],
-    queryFn: () =>
-      actor ? actor.getMyCourseCompletions() : Promise.resolve([]),
-    enabled,
-  });
-
-  const points = useQuery<bigint>({
-    queryKey: ["myPoints"],
-    queryFn: () => (actor ? actor.getMyPoints() : Promise.resolve(BigInt(0))),
-    enabled,
-  });
-
-  const badges = useQuery<Badge[]>({
-    queryKey: ["myBadges"],
-    queryFn: () => (actor ? actor.getMyBadges() : Promise.resolve([])),
-    enabled,
-  });
-
-  return { courses, completions, points, badges };
-}
-
-// ─── Course action button logic ───────────────────────────────────────────────
 type ButtonVariant = "join" | "start" | "continue" | "buy";
 
 function getCourseButtonVariant(
-  courseId: bigint,
+  course: LcCourse,
   isLoggedIn: boolean,
   enrolledIds: Set<string>,
   progressPct: number,
 ): ButtonVariant {
-  const opts = getCourseOptions(courseId);
-  // Only show "Buy Course" if payment is required AND not yet enrolled
-  if (opts.accessRule === "payment" && !enrolledIds.has(courseId.toString()))
+  if (course.accessRule === "payment" && !enrolledIds.has(course.id))
     return "buy";
   if (!isLoggedIn) return "join";
-  if (!enrolledIds.has(courseId.toString())) return "start";
+  if (!enrolledIds.has(course.id)) return "start";
   if (progressPct < 100) return "continue";
   return "start";
 }
 
-// ─── CourseCard ───────────────────────────────────────────────────────────────
 interface CourseCardProps {
-  course: Course;
+  course: LcCourse;
   idx: number;
   isLoggedIn: boolean;
   enrolledIds: Set<string>;
-  completedLessons: Map<string, number>;
-  onAction: (courseId: bigint, variant: ButtonVariant) => void;
+  completedLessonsMap: Map<string, number>;
+  onAction: (courseId: string, variant: ButtonVariant) => void;
 }
 
 function CourseCard({
@@ -199,19 +137,14 @@ function CourseCard({
   idx,
   isLoggedIn,
   enrolledIds,
-  completedLessons,
+  completedLessonsMap,
   onAction,
 }: CourseCardProps) {
-  const totalLessons = getLessonCount(course.id);
-  const completedCount = completedLessons.get(course.id.toString()) ?? 0;
+  const totalLessons = course.lessons.length;
+  const completedCount = completedLessonsMap.get(course.id) ?? 0;
   const pct =
     totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0;
-  const variant = getCourseButtonVariant(
-    course.id,
-    isLoggedIn,
-    enrolledIds,
-    pct,
-  );
+  const variant = getCourseButtonVariant(course, isLoggedIn, enrolledIds, pct);
   const initial = course.title.trim()[0]?.toUpperCase() ?? "C";
 
   const buttonConfig = {
@@ -248,7 +181,6 @@ function CourseCard({
       className="group"
     >
       <Card className="overflow-hidden h-full flex flex-col shadow-card hover:shadow-lg transition-shadow duration-300 border-border/60">
-        {/* Cover */}
         <div
           className={`h-40 relative overflow-hidden bg-gradient-to-br ${GRADIENTS[idx % GRADIENTS.length]} flex items-center justify-center shrink-0`}
         >
@@ -257,8 +189,6 @@ function CourseCard({
           </span>
           <div className="absolute inset-0 bg-black/10 group-hover:bg-black/5 transition-colors duration-300" />
         </div>
-
-        {/* Body */}
         <CardContent className="flex flex-col flex-1 pt-4 pb-4 px-4 gap-3">
           <div className="flex-1 space-y-2">
             <h3 className="font-semibold leading-snug line-clamp-2 text-foreground text-sm">
@@ -268,7 +198,7 @@ function CourseCard({
               {generateDescription(course.title)}
             </p>
             <div className="flex flex-wrap gap-1">
-              {(course.tags ?? []).slice(0, 3).map((tag) => (
+              {course.tags.slice(0, 3).map((tag) => (
                 <UiBadge
                   key={tag}
                   variant="secondary"
@@ -279,8 +209,6 @@ function CourseCard({
               ))}
             </div>
           </div>
-
-          {/* Progress bar for in-progress courses */}
           {variant === "continue" && totalLessons > 0 && (
             <div className="space-y-1">
               <div className="flex justify-between text-[10px] text-muted-foreground">
@@ -292,8 +220,6 @@ function CourseCard({
               <Progress value={pct} className="h-1.5" />
             </div>
           )}
-
-          {/* Action button */}
           <Button
             data-ocid={`courses.item.${idx + 1}`}
             size="sm"
@@ -311,7 +237,6 @@ function CourseCard({
   );
 }
 
-// ─── Profile Panel ────────────────────────────────────────────────────────────
 interface ProfilePanelProps {
   name: string;
   email: string;
@@ -333,7 +258,6 @@ function ProfilePanel({
         .toUpperCase()
         .slice(0, 2)
     : "LN";
-
   const currentTier = getBadgeTier(points);
   const nextTierIdx =
     BADGE_TIERS.findIndex((t) => t.name === currentTier.name) + 1;
@@ -344,18 +268,14 @@ function ProfilePanel({
         ((points - currentTier.min) / (nextTier.min - currentTier.min)) * 100,
       )
     : 100;
-
   const TierIcon = currentTier.icon;
 
   return (
     <Card className="sticky top-6 overflow-hidden border-border/60 shadow-card">
-      {/* Header gradient */}
       <div className="h-20 bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-700 relative">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(255,255,255,0.15),transparent)]" />
       </div>
-
       <CardContent className="pt-0 pb-5 px-5">
-        {/* Avatar — overlaps header */}
         <div className="flex flex-col items-center -mt-10 mb-4">
           <Avatar className="h-20 w-20 border-4 border-card shadow-lg">
             <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-violet-600 text-white text-xl font-bold">
@@ -367,8 +287,6 @@ function ProfilePanel({
           </h3>
           {email && <p className="text-xs text-muted-foreground">{email}</p>}
         </div>
-
-        {/* Points display */}
         <div className="flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-50 to-violet-50 border border-indigo-200/60 rounded-xl px-4 py-3 mb-4">
           <Zap className="h-5 w-5 text-indigo-600 fill-indigo-200" />
           <span className="text-2xl font-black text-indigo-700">
@@ -376,8 +294,6 @@ function ProfilePanel({
           </span>
           <span className="text-sm text-indigo-500 font-medium">pts</span>
         </div>
-
-        {/* Current badge level */}
         <div
           className={`rounded-xl border-2 ${currentTier.border} ${currentTier.bg} px-4 py-3 mb-4 flex items-center gap-3`}
         >
@@ -399,15 +315,11 @@ function ProfilePanel({
             )}
           </div>
         </div>
-
-        {/* Progress to next tier */}
         {nextTier && (
           <div className="mb-4">
             <Progress value={progressToNext} className="h-2" />
           </div>
         )}
-
-        {/* Tier ladder */}
         <div className="space-y-1 mb-4">
           <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
             All Tiers
@@ -442,8 +354,6 @@ function ProfilePanel({
             );
           })}
         </div>
-
-        {/* Enrolled count */}
         <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground border-t border-border pt-3">
           <BookOpen className="h-3.5 w-3.5" />
           <span>
@@ -455,17 +365,12 @@ function ProfilePanel({
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function LearnerCoursesPage() {
   const navigate = useNavigate();
-  const { profile, isAuthenticated } = useAuthContext();
+  const { isAuthenticated, userId, userName, userEmail } = useAuthContext();
   const [search, setSearch] = useState("");
-  const { courses, completions, points } = useLearnerData();
 
-  const published = useMemo(
-    () => (courses.data ?? []).filter((c) => c.isPublished),
-    [courses.data],
-  );
+  const published = useMemo(() => localDb.getPublishedCourses(), []);
 
   const filtered = useMemo(
     () =>
@@ -475,35 +380,24 @@ export default function LearnerCoursesPage() {
     [published, search],
   );
 
-  const enrolledIds = useMemo(
-    () => new Set((completions.data ?? []).map((e) => e.courseId.toString())),
-    [completions.data],
-  );
+  const enrolledIds = useMemo(() => {
+    if (!userId) return new Set<string>();
+    return new Set(localDb.getUserEnrollments(userId).map((e) => e.courseId));
+  }, [userId]);
 
-  const completedLessons = useMemo(() => {
+  const completedLessonsMap = useMemo(() => {
     const map = new Map<string, number>();
+    if (!userId) return map;
     for (const course of published) {
-      try {
-        const raw = localStorage.getItem(
-          `learnova_lesson_progress_${course.id}`,
-        );
-        if (raw) {
-          const arr = JSON.parse(raw) as Array<{ isCompleted: boolean }>;
-          map.set(
-            course.id.toString(),
-            arr.filter((l) => l.isCompleted).length,
-          );
-        }
-      } catch {
-        // ignore
-      }
+      const completed = localDb.getLessonProgress(userId, course.id);
+      map.set(course.id, completed.length);
     }
     return map;
-  }, [published]);
+  }, [published, userId]);
 
-  const ptsNumber = Number(points.data ?? BigInt(0));
+  const points = userId ? localDb.getPoints(userId) : 0;
 
-  function handleAction(courseId: bigint, variant: ButtonVariant) {
+  function handleAction(courseId: string, variant: ButtonVariant) {
     if (variant === "buy") {
       if (!isAuthenticated) {
         navigate({
@@ -529,9 +423,7 @@ export default function LearnerCoursesPage() {
     <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col lg:flex-row gap-8 items-start">
-          {/* Main content */}
           <div className="flex-1 min-w-0">
-            {/* Page header */}
             <motion.div
               initial={{ opacity: 0, y: -12 }}
               animate={{ opacity: 1, y: 0 }}
@@ -545,8 +437,6 @@ export default function LearnerCoursesPage() {
                 Continue your learning journey
               </p>
             </motion.div>
-
-            {/* Search */}
             <motion.div
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -562,21 +452,7 @@ export default function LearnerCoursesPage() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </motion.div>
-
-            {/* Course grid */}
-            {courses.isLoading ? (
-              <div
-                data-ocid="courses.loading_state"
-                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"
-              >
-                {[1, 2, 3, 4, 5, 6].map((i) => (
-                  <div
-                    key={i}
-                    className="h-72 rounded-xl bg-muted animate-pulse"
-                  />
-                ))}
-              </div>
-            ) : filtered.length === 0 ? (
+            {filtered.length === 0 ? (
               <motion.div
                 data-ocid="courses.empty_state"
                 initial={{ opacity: 0 }}
@@ -604,20 +480,18 @@ export default function LearnerCoursesPage() {
               >
                 {filtered.map((course, idx) => (
                   <CourseCard
-                    key={course.id.toString()}
+                    key={course.id}
                     course={course}
                     idx={idx}
                     isLoggedIn={isAuthenticated}
                     enrolledIds={enrolledIds}
-                    completedLessons={completedLessons}
+                    completedLessonsMap={completedLessonsMap}
                     onAction={handleAction}
                   />
                 ))}
               </motion.div>
             )}
           </div>
-
-          {/* Profile sidebar */}
           <motion.aside
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -625,9 +499,9 @@ export default function LearnerCoursesPage() {
             className="w-full lg:w-72 shrink-0"
           >
             <ProfilePanel
-              name={profile?.name ?? ""}
-              email={profile?.email ?? ""}
-              points={ptsNumber}
+              name={userName ?? ""}
+              email={userEmail ?? ""}
+              points={points}
               enrolledCount={enrolledIds.size}
             />
           </motion.aside>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { flushSync } from "react-dom";
 
 export interface LocalUser {
   id: string;
@@ -11,11 +12,28 @@ export interface LocalUser {
 const USERS_KEY = "learnova_users";
 const SESSION_KEY = "learnova_session";
 
+const DEFAULT_ADMIN: LocalUser = {
+  id: "default-admin-001",
+  email: "admin@learnova.com",
+  password: "admin123",
+  name: "Admin",
+  role: "admin",
+};
+
+function ensureDefaultAdmin(users: LocalUser[]): LocalUser[] {
+  const hasDefault = users.find((u) => u.id === DEFAULT_ADMIN.id);
+  if (!hasDefault) {
+    return [DEFAULT_ADMIN, ...users];
+  }
+  return users;
+}
+
 function getUsers(): LocalUser[] {
   try {
-    return JSON.parse(localStorage.getItem(USERS_KEY) || "[]");
+    const stored = JSON.parse(localStorage.getItem(USERS_KEY) || "[]");
+    return ensureDefaultAdmin(stored);
   } catch {
-    return [];
+    return [DEFAULT_ADMIN];
   }
 }
 
@@ -39,10 +57,13 @@ export function useLocalAuth() {
     return getUsers().find((u) => u.id === id) ?? null;
   });
 
-  const [isInitialized, setIsInitialized] = useState(false);
+  // localStorage is synchronous — no need to wait for an effect, start as true
+  const [isInitialized] = useState(true);
 
   useEffect(() => {
-    setIsInitialized(true);
+    // Ensure default admin always exists in storage
+    const users = getUsers();
+    saveUsers(users);
   }, []);
 
   const login = useCallback(
@@ -58,7 +79,9 @@ export function useLocalAuth() {
       );
       if (!user) return { success: false, error: "Invalid email or password." };
       setSessionUserId(user.id);
-      setCurrentUser(user);
+      flushSync(() => {
+        setCurrentUser(user);
+      });
       return { success: true, role: user.role };
     },
     [],
@@ -78,27 +101,28 @@ export function useLocalAuth() {
           error: "An account with this email already exists.",
         };
       }
-      // First account ever automatically becomes admin
-      const assignedRole: LocalUser["role"] =
-        users.length === 0 ? "admin" : role;
       const newUser: LocalUser = {
         id: crypto.randomUUID(),
         email,
         password,
         name,
-        role: assignedRole,
+        role,
       };
       saveUsers([...users, newUser]);
       setSessionUserId(newUser.id);
-      setCurrentUser(newUser);
-      return { success: true, role: assignedRole };
+      flushSync(() => {
+        setCurrentUser(newUser);
+      });
+      return { success: true, role };
     },
     [],
   );
 
   const logout = useCallback(() => {
     setSessionUserId(null);
-    setCurrentUser(null);
+    flushSync(() => {
+      setCurrentUser(null);
+    });
   }, []);
 
   const updateUser = useCallback(
@@ -114,7 +138,19 @@ export function useLocalAuth() {
     [],
   );
 
-  const isFirstUser = (): boolean => getUsers().length === 0;
+  const isFirstUser = (): boolean => {
+    // Always returns false since default admin exists
+    return false;
+  };
+
+  const resetAllAccounts = useCallback(() => {
+    // Keep the default admin, only remove user-created accounts
+    saveUsers([DEFAULT_ADMIN]);
+    localStorage.removeItem(SESSION_KEY);
+    flushSync(() => {
+      setCurrentUser(null);
+    });
+  }, []);
 
   return {
     currentUser,
@@ -124,5 +160,8 @@ export function useLocalAuth() {
     logout,
     updateUser,
     isFirstUser,
+    resetAllAccounts,
+    defaultAdminEmail: DEFAULT_ADMIN.email,
+    defaultAdminPassword: DEFAULT_ADMIN.password,
   };
 }

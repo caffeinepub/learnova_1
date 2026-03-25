@@ -21,7 +21,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -30,7 +29,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { Principal } from "@dfinity/principal";
 import {
   AlertTriangle,
   Search,
@@ -40,17 +38,11 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { type UserProfile, UserRole } from "../backend.d";
-import { useActor } from "../hooks/useActor";
-import { useGetUsers, useSetUserRole } from "../hooks/useQueries";
+import { useAuthContext } from "../contexts/AuthContext";
+import * as localDb from "../lib/localDb";
+import type { LcUser } from "../lib/localDb";
 
 type DisplayRole = "admin" | "instructor" | "learner";
-
-function getRoleDisplay(profile: UserProfile): DisplayRole {
-  if (profile.role === UserRole.admin) return "admin";
-  if (profile.avatarUrl?.includes("instructor")) return "instructor";
-  return "learner";
-}
 
 function RoleBadge({ role }: { role: DisplayRole }) {
   const map = {
@@ -64,61 +56,64 @@ function RoleBadge({ role }: { role: DisplayRole }) {
 }
 
 export default function AdminUsersPage() {
-  const { data: users, isLoading } = useGetUsers();
-  const setRole = useSetUserRole();
-  const { actor } = useActor();
+  const { logout } = useAuthContext();
   const [search, setSearch] = useState("");
+  const [, forceUpdate] = useState(0);
   const [resetting, setResetting] = useState(false);
 
-  const filtered = (users ?? []).filter(
+  const users = localDb.getUsers();
+
+  const filtered = users.filter(
     (u) =>
       u.name.toLowerCase().includes(search.toLowerCase()) ||
       u.email.toLowerCase().includes(search.toLowerCase()),
   );
 
-  const handleRoleChange = async (user: UserProfile, newRole: DisplayRole) => {
-    let backendRole: UserRole;
-    if (newRole === "admin") backendRole = UserRole.admin;
-    else backendRole = UserRole.user;
-
-    try {
-      await setRole.mutateAsync({
-        user: user.principal as unknown as Principal,
-        role: backendRole,
-      });
-      toast.success(`Updated ${user.name}'s role to ${newRole}`);
-    } catch {
-      toast.error("Failed to update role.");
-    }
+  const handleRoleChange = (user: LcUser, newRole: DisplayRole) => {
+    localDb.updateUserRole(user.id, newRole);
+    toast.success(`Updated ${user.name}'s role to ${newRole}`);
+    forceUpdate((n) => n + 1);
   };
 
-  const handleResetDatabase = async () => {
-    if (!actor) {
-      toast.error("Not connected to backend.");
+  const handleDeleteUser = (user: LcUser) => {
+    if (user.id === "default-admin-001") {
+      toast.error("Cannot delete the default admin account.");
       return;
     }
-    setResetting(true);
-    try {
-      await (actor as any).resetDatabase();
-      localStorage.clear();
-      sessionStorage.clear();
-      toast.success("Database reset successfully. Redirecting...");
-      setTimeout(() => {
-        window.location.href = "/";
-      }, 1000);
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to reset database. Please try again.");
-      setResetting(false);
-    }
+    localDb.deleteUser(user.id);
+    toast.success(`Deleted ${user.name}`);
+    forceUpdate((n) => n + 1);
   };
 
-  const formatDate = (ts: bigint) => {
-    return new Date(Number(ts) / 1_000_000).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
+  const handleResetDatabase = () => {
+    setResetting(true);
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith("learnova_") && key !== "learnova_users") {
+        keysToRemove.push(key);
+      }
+    }
+    for (const key of keysToRemove) {
+      localStorage.removeItem(key);
+    }
+    localStorage.setItem(
+      "learnova_users",
+      JSON.stringify([
+        {
+          id: "default-admin-001",
+          email: "admin@learnova.com",
+          password: "admin123",
+          name: "Admin",
+          role: "admin",
+        },
+      ]),
+    );
+    toast.success("Database reset successfully. Logging out...");
+    setTimeout(() => {
+      logout();
+      window.location.hash = "/login";
+    }, 1000);
   };
 
   return (
@@ -138,9 +133,7 @@ export default function AdminUsersPage() {
             User Management
           </h1>
           <p className="text-muted-foreground mt-1">
-            {users
-              ? `${users.length} total users registered`
-              : "Loading users..."}
+            {users.length} total users registered
           </p>
         </div>
       </div>
@@ -164,23 +157,7 @@ export default function AdminUsersPage() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          {isLoading ? (
-            <div
-              className="p-6 space-y-3"
-              data-ocid="admin_users.loading_state"
-            >
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="flex items-center gap-4">
-                  <Skeleton className="h-8 w-8 rounded-full" />
-                  <div className="flex-1 space-y-1.5">
-                    <Skeleton className="h-4 w-40" />
-                    <Skeleton className="h-3 w-56" />
-                  </div>
-                  <Skeleton className="h-8 w-28" />
-                </div>
-              ))}
-            </div>
-          ) : filtered.length === 0 ? (
+          {filtered.length === 0 ? (
             <div
               className="py-16 text-center text-muted-foreground"
               data-ocid="admin_users.empty_state"
@@ -198,16 +175,16 @@ export default function AdminUsersPage() {
                     <TableHead>User</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Role</TableHead>
-                    <TableHead>Joined</TableHead>
                     <TableHead className="text-right pr-5">
                       Change Role
                     </TableHead>
+                    <TableHead className="text-right pr-5">Delete</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.map((user, idx) => (
                     <TableRow
-                      key={String(user.id)}
+                      key={user.id}
                       data-ocid={`admin_users.row.${idx + 1}`}
                     >
                       <TableCell className="pl-5 text-muted-foreground text-sm">
@@ -234,14 +211,11 @@ export default function AdminUsersPage() {
                         {user.email}
                       </TableCell>
                       <TableCell>
-                        <RoleBadge role={getRoleDisplay(user)} />
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {formatDate(user.createdAt)}
+                        <RoleBadge role={user.role} />
                       </TableCell>
                       <TableCell className="text-right pr-5">
                         <Select
-                          defaultValue={getRoleDisplay(user)}
+                          defaultValue={user.role}
                           onValueChange={(v) =>
                             handleRoleChange(user, v as DisplayRole)
                           }
@@ -260,6 +234,18 @@ export default function AdminUsersPage() {
                             <SelectItem value="learner">Learner</SelectItem>
                           </SelectContent>
                         </Select>
+                      </TableCell>
+                      <TableCell className="text-right pr-5">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                          disabled={user.id === "default-admin-001"}
+                          onClick={() => handleDeleteUser(user)}
+                          data-ocid={`admin_users.delete_button.${idx + 1}`}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
