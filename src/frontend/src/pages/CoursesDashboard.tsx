@@ -275,7 +275,7 @@ export default function CoursesDashboard() {
               placeholder="Search courses…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-52 h-9 text-sm pl-3"
+              className="w-full sm:w-52 h-9 text-sm pl-3"
               data-ocid="courses.search_input"
             />
           </div>
@@ -347,7 +347,7 @@ export default function CoursesDashboard() {
                     className="text-center py-10 text-muted-foreground text-sm border-2 border-dashed rounded-lg"
                     data-ocid="courses.drafts.empty_state"
                   >
-                    No draft courses
+                    No courses yet. Click + to create your first course.
                   </div>
                 ) : (
                   drafts.map((course, i) => (
@@ -380,7 +380,7 @@ export default function CoursesDashboard() {
                     className="text-center py-10 text-muted-foreground text-sm border-2 border-dashed rounded-lg"
                     data-ocid="courses.published.empty_state"
                   >
-                    No published courses
+                    No courses yet. Click + to create your first course.
                   </div>
                 ) : (
                   published.map((course, i) => (
@@ -439,7 +439,7 @@ export default function CoursesDashboard() {
                         className="text-center py-10 text-muted-foreground"
                         data-ocid="courses.list.empty_state"
                       >
-                        No courses found
+                        No results found for your search.
                       </TableCell>
                     </TableRow>
                   ) : (

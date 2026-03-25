@@ -12,10 +12,12 @@ import { AuthProvider } from "./contexts/AuthContext";
 
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminUsersPage from "./pages/AdminUsersPage";
+import CheckoutPage from "./pages/CheckoutPage";
 import CourseDetailPage from "./pages/CourseDetailPage";
 import CourseEditPage from "./pages/CourseEditPage";
 import CoursesDashboard from "./pages/CoursesDashboard";
 import DashboardPage from "./pages/DashboardPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import HomePage from "./pages/HomePage";
 import InstructorDashboard from "./pages/InstructorDashboard";
 import LearnerCoursesPage from "./pages/LearnerCoursesPage";
@@ -24,6 +26,7 @@ import LessonPlayerPage from "./pages/LessonPlayerPage";
 import LoginPage from "./pages/LoginPage";
 import ProfilePage from "./pages/ProfilePage";
 import ReportingDashboardPage from "./pages/ReportingDashboardPage";
+import SignupPage from "./pages/SignupPage";
 import UnauthorizedPage from "./pages/UnauthorizedPage";
 
 const rootRoute = createRootRoute({
@@ -46,6 +49,16 @@ const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/login",
   component: LoginPage,
+});
+const signupRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/signup",
+  component: SignupPage,
+});
+const forgotPasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/forgot-password",
+  component: ForgotPasswordPage,
 });
 const dashboardRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -148,6 +161,16 @@ const courseDetailRoute = createRoute({
   ),
 });
 
+const checkoutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/learner/courses/$courseId/checkout",
+  component: () => (
+    <ProtectedRoute allowedRoles={["admin", "learner"]}>
+      <CheckoutPage />
+    </ProtectedRoute>
+  ),
+});
+
 const lessonPlayerRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/learner/courses/$courseId/lessons/$lessonId",
@@ -171,6 +194,8 @@ const profileRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   homeRoute,
   loginRoute,
+  signupRoute,
+  forgotPasswordRoute,
   dashboardRoute,
   unauthorizedRoute,
   adminRoute,
@@ -182,6 +207,7 @@ const routeTree = rootRoute.addChildren([
   learnerRoute,
   learnerCoursesRoute,
   courseDetailRoute,
+  checkoutRoute,
   lessonPlayerRoute,
   profileRoute,
 ]);

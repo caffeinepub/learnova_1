@@ -120,6 +120,15 @@ export interface Course {
     instructorId: Principal;
     lessonCount: bigint;
 }
+export interface LearnerCourseReport {
+    completedAt?: Time;
+    learnerPrincipal: Principal;
+    startedAt?: Time;
+    isCompleted: boolean;
+    completedLessons: bigint;
+    enrolledAt: Time;
+    courseId: CourseId;
+}
 export interface QuizAttempt {
     completedAt: Time;
     score: bigint;
@@ -178,8 +187,10 @@ export interface backendInterface {
     enrollCourse(arg0: {
         courseId: CourseId;
     }): Promise<void>;
+    enrollLearnerByEmail(courseId: CourseId, email: string): Promise<void>;
     getAllUsers(): Promise<Array<UserProfile>>;
     getCallerUserRole(): Promise<UserRole>;
+    getCourseAttendees(courseId: CourseId): Promise<Array<UserProfile>>;
     getCourseReviews(courseId: CourseId): Promise<Array<Review>>;
     getCourses(): Promise<Array<Course>>;
     getEnrollments(principal: Principal): Promise<Array<Enrollment>>;
@@ -189,6 +200,7 @@ export interface backendInterface {
     getMyLessonProgress(courseId: CourseId): Promise<Array<LessonProgress>>;
     getMyPoints(): Promise<bigint>;
     getMyQuizAttempts(courseId: CourseId, quizId: string): Promise<Array<QuizAttempt>>;
+    getReportingData(): Promise<Array<LearnerCourseReport>>;
     getUserCount(): Promise<bigint>;
     getUserProfile(principal: Principal): Promise<UserProfile>;
     incrementCourseViews(id: CourseId): Promise<void>;
@@ -202,7 +214,7 @@ export interface backendInterface {
     updateCourse(id: CourseId, dto: UpdateCourseDto): Promise<Course>;
     updateMyProfile(updateProfileDto: UpdateUserProfileDto): Promise<void>;
 }
-import type { CourseId as _CourseId, Enrollment as _Enrollment, LessonProgress as _LessonProgress, ProfileId as _ProfileId, Time as _Time, UserProfile as _UserProfile, UserRole as _UserRole } from "./declarations/backend.did.d.ts";
+import type { CourseId as _CourseId, Enrollment as _Enrollment, LearnerCourseReport as _LearnerCourseReport, LessonProgress as _LessonProgress, ProfileId as _ProfileId, Time as _Time, UserProfile as _UserProfile, UserRole as _UserRole } from "./declarations/backend.did.d.ts";
 export class Backend implements backendInterface {
     constructor(private actor: ActorSubclass<_SERVICE>, private _uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, private _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, private processError?: (error: unknown) => never){}
     async _initializeAccessControlWithSecret(arg0: string): Promise<void> {
@@ -319,6 +331,20 @@ export class Backend implements backendInterface {
             return result;
         }
     }
+    async enrollLearnerByEmail(arg0: CourseId, arg1: string): Promise<void> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.enrollLearnerByEmail(arg0, arg1);
+                return result;
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.enrollLearnerByEmail(arg0, arg1);
+            return result;
+        }
+    }
     async getAllUsers(): Promise<Array<UserProfile>> {
         if (this.processError) {
             try {
@@ -345,6 +371,20 @@ export class Backend implements backendInterface {
         } else {
             const result = await this.actor.getCallerUserRole();
             return from_candid_UserRole_n5(this._uploadFile, this._downloadFile, result);
+        }
+    }
+    async getCourseAttendees(arg0: CourseId): Promise<Array<UserProfile>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getCourseAttendees(arg0);
+                return from_candid_vec_n7(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getCourseAttendees(arg0);
+            return from_candid_vec_n7(this._uploadFile, this._downloadFile, result);
         }
     }
     async getCourseReviews(arg0: CourseId): Promise<Array<Review>> {
@@ -471,6 +511,20 @@ export class Backend implements backendInterface {
         } else {
             const result = await this.actor.getMyQuizAttempts(arg0, arg1);
             return result;
+        }
+    }
+    async getReportingData(): Promise<Array<LearnerCourseReport>> {
+        if (this.processError) {
+            try {
+                const result = await this.actor.getReportingData();
+                return from_candid_vec_n15(this._uploadFile, this._downloadFile, result);
+            } catch (e) {
+                this.processError(e);
+                throw new Error("unreachable");
+            }
+        } else {
+            const result = await this.actor.getReportingData();
+            return from_candid_vec_n15(this._uploadFile, this._downloadFile, result);
         }
     }
     async getUserCount(): Promise<bigint> {
@@ -645,6 +699,9 @@ export class Backend implements backendInterface {
 function from_candid_Enrollment_n9(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Enrollment): Enrollment {
     return from_candid_record_n10(_uploadFile, _downloadFile, value);
 }
+function from_candid_LearnerCourseReport_n16(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _LearnerCourseReport): LearnerCourseReport {
+    return from_candid_record_n17(_uploadFile, _downloadFile, value);
+}
 function from_candid_LessonProgress_n13(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _LessonProgress): LessonProgress {
     return from_candid_record_n14(_uploadFile, _downloadFile, value);
 }
@@ -696,6 +753,33 @@ function from_candid_record_n14(_uploadFile: (file: ExternalBlob) => Promise<Uin
         courseId: value.courseId
     };
 }
+function from_candid_record_n17(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
+    completedAt: [] | [_Time];
+    learnerPrincipal: Principal;
+    startedAt: [] | [_Time];
+    isCompleted: boolean;
+    completedLessons: bigint;
+    enrolledAt: _Time;
+    courseId: _CourseId;
+}): {
+    completedAt?: Time;
+    learnerPrincipal: Principal;
+    startedAt?: Time;
+    isCompleted: boolean;
+    completedLessons: bigint;
+    enrolledAt: Time;
+    courseId: CourseId;
+} {
+    return {
+        completedAt: record_opt_to_undefined(from_candid_opt_n11(_uploadFile, _downloadFile, value.completedAt)),
+        learnerPrincipal: value.learnerPrincipal,
+        startedAt: record_opt_to_undefined(from_candid_opt_n11(_uploadFile, _downloadFile, value.startedAt)),
+        isCompleted: value.isCompleted,
+        completedLessons: value.completedLessons,
+        enrolledAt: value.enrolledAt,
+        courseId: value.courseId
+    };
+}
 function from_candid_record_n4(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: {
     id: _ProfileId;
     principal: Principal;
@@ -734,6 +818,9 @@ function from_candid_variant_n6(_uploadFile: (file: ExternalBlob) => Promise<Uin
 }
 function from_candid_vec_n12(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_LessonProgress>): Array<LessonProgress> {
     return value.map((x)=>from_candid_LessonProgress_n13(_uploadFile, _downloadFile, x));
+}
+function from_candid_vec_n15(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_LearnerCourseReport>): Array<LearnerCourseReport> {
+    return value.map((x)=>from_candid_LearnerCourseReport_n16(_uploadFile, _downloadFile, x));
 }
 function from_candid_vec_n7(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: Array<_UserProfile>): Array<UserProfile> {
     return value.map((x)=>from_candid_UserProfile_n3(_uploadFile, _downloadFile, x));

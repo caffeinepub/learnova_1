@@ -8,8 +8,6 @@ import Nat "mo:core/Nat";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
 
-
-
 actor {
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
@@ -180,7 +178,7 @@ actor {
     courses.add(id, { course with views = course.views + 1 });
   };
 
-  /// Enrollments
+  // Enrollments
   public type Enrollment = {
     principal : Principal;
     courseId : CourseId;
@@ -238,6 +236,99 @@ actor {
       existing.add(existing.size(), enrollment);
       enrollments.add(caller, existing);
     };
+  };
+
+  public type EnrollmentByEmailDto = {
+    courseId : CourseId;
+    email : Text;
+  };
+
+  // NEW: Enroll a user by email (for admins/instructors)
+  public shared ({ caller }) func enrollLearnerByEmail(courseId : CourseId, email : Text) : async () {
+    // Check course exists first
+    let course = switch (courses.get(courseId)) {
+      case (null) { Runtime.trap("Course not found") };
+      case (?c) { c };
+    };
+
+    // Authorization: Only admins OR the course instructor can enroll learners
+    let callerProfile = getOrTrap(caller);
+    if (not (AccessControl.isAdmin(accessControlState, caller))) {
+      if (caller != course.instructorId) {
+        Runtime.trap("Unauthorized: Only course instructor or admins can enroll learners by email");
+      };
+    };
+
+    // Find the learner's principal by email
+    let matching = profiles.values().filter(func(p) { p.email == email }).toArray();
+    let profile = if (matching.size() == 0) {
+      Runtime.trap("User with email " # email # " not found");
+    } else {
+      let found = matching[0];
+      found;
+    };
+    let principal = profile.principal;
+
+    // Check not already enrolled
+    let existing = switch (enrollments.get(principal)) {
+      case (null) { Map.empty<Nat, Enrollment>() };
+      case (?existing) { existing };
+    };
+
+    let hasAlreadyEnrolled = switch (enrollments.get(principal)) {
+      case (null) { false };
+      case (?existing) {
+        existing.entries().any(func((_, existingEnrollment)) { existingEnrollment.courseId == courseId });
+      };
+    };
+    if (hasAlreadyEnrolled) { Runtime.trap("Already enrolled") } else {
+      let enrollment : Enrollment = {
+        principal;
+        courseId;
+        enrolledAt = Time.now();
+        isCompleted = false;
+        completedAt = null;
+      };
+      existing.add(existing.size(), enrollment);
+      enrollments.add(principal, existing);
+    };
+  };
+
+  // NEW: Get all profiles attending a course
+  public query ({ caller }) func getCourseAttendees(courseId : CourseId) : async [UserProfile] {
+    // Only instructors and admins can get the attendees
+    let course = switch (courses.get(courseId)) {
+      case (null) { Runtime.trap("Course not found") };
+      case (?course) { course };
+    };
+    let callerProfile = getOrTrap(caller);
+    if (not (AccessControl.isAdmin(accessControlState, caller))) {
+      // Only the instructor can view their own attendees, or admin can view any course
+      if (caller != course.instructorId) {
+        Runtime.trap("Only course instructor or admins can view attendees");
+      };
+    };
+
+    // Flatten all enrollments to a single array of courses
+    let allEnrollments = enrollments.entries().flatMap(
+      func((principal, map)) {
+        map.entries().map(
+          func((_, enrollment)) { (principal, enrollment) }
+        );
+      }
+    ).toArray();
+
+    let allCourseEnrollments = allEnrollments.filter(
+      func((principal, enrollment)) { enrollment.courseId == courseId }
+    );
+
+    if (allCourseEnrollments.size() == 0) { Runtime.trap("No enrollments for this course yet") };
+
+    // Find learner profiles for all attendees
+    let attendeeProfiles = allCourseEnrollments.map(
+      func((principal, _)) { getOrTrap(principal) }
+    );
+    attendeeProfiles;
   };
 
   func updateProfile(

@@ -474,8 +474,8 @@ export default function ReportingDashboardPage() {
                           <Users className="h-8 w-8 opacity-30" />
                           <span className="text-sm">
                             {allRows.length === 0
-                              ? "No learner progress data yet."
-                              : "No learners match the current filter."}
+                              ? "No participants yet."
+                              : "No participants yet."}
                           </span>
                         </div>
                       </TableCell>

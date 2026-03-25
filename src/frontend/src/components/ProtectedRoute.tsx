@@ -1,5 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
-import { Navigate } from "@tanstack/react-router";
+import { Navigate, useLocation } from "@tanstack/react-router";
 import { type AppRole, useAuthContext } from "../contexts/AuthContext";
 
 interface Props {
@@ -9,6 +9,7 @@ interface Props {
 
 export default function ProtectedRoute({ children, allowedRoles }: Props) {
   const { isAuthenticated, isLoading, isFetched, role } = useAuthContext();
+  const location = useLocation();
 
   if (isLoading || !isFetched) {
     return (
@@ -30,7 +31,8 @@ export default function ProtectedRoute({ children, allowedRoles }: Props) {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" />;
+    const redirectUrl = location.pathname + location.search;
+    return <Navigate to="/login" search={{ redirect: redirectUrl }} />;
   }
 
   if (!allowedRoles.includes(role)) {

@@ -175,7 +175,9 @@ function getCourseButtonVariant(
   progressPct: number,
 ): ButtonVariant {
   const opts = getCourseOptions(courseId);
-  if (opts.accessRule === "payment") return "buy";
+  // Only show "Buy Course" if payment is required AND not yet enrolled
+  if (opts.accessRule === "payment" && !enrolledIds.has(courseId.toString()))
+    return "buy";
   if (!isLoggedIn) return "join";
   if (!enrolledIds.has(courseId.toString())) return "start";
   if (progressPct < 100) return "continue";
@@ -478,12 +480,8 @@ export default function LearnerCoursesPage() {
     [completions.data],
   );
 
-  // Build completed lessons map from backend completions data
-  // We approximate using enrollments; lesson-level data would need per-course calls
   const completedLessons = useMemo(() => {
     const map = new Map<string, number>();
-    // For a lightweight approach, we store per-course lesson progress in localStorage
-    // read all at once
     for (const course of published) {
       try {
         const raw = localStorage.getItem(
@@ -506,18 +504,31 @@ export default function LearnerCoursesPage() {
   const ptsNumber = Number(points.data ?? BigInt(0));
 
   function handleAction(courseId: bigint, variant: ButtonVariant) {
-    if (variant === "join") {
-      // Navigate to login or course detail
-      navigate({ to: `/learner/courses/${courseId}` });
-    } else {
-      navigate({ to: `/learner/courses/${courseId}` });
+    if (variant === "buy") {
+      if (!isAuthenticated) {
+        navigate({
+          to: "/login",
+          search: { redirect: `/learner/courses/${courseId}/checkout` },
+        });
+      } else {
+        navigate({ to: `/learner/courses/${courseId}/checkout` });
+      }
+      return;
     }
+    if (!isAuthenticated && (variant === "join" || variant === "start")) {
+      navigate({
+        to: "/login",
+        search: { redirect: `/learner/courses/${courseId}` },
+      });
+      return;
+    }
+    navigate({ to: `/learner/courses/${courseId}` });
   }
 
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex gap-8 items-start">
+        <div className="flex flex-col lg:flex-row gap-8 items-start">
           {/* Main content */}
           <div className="flex-1 min-w-0">
             {/* Page header */}
@@ -576,8 +587,8 @@ export default function LearnerCoursesPage() {
                 <h3 className="text-xl font-semibold mb-2">No courses found</h3>
                 <p className="text-muted-foreground text-sm">
                   {search
-                    ? "Try a different search term"
-                    : "No published courses available yet"}
+                    ? "No results found for your search."
+                    : "No courses available right now."}
                 </p>
               </motion.div>
             ) : (
@@ -611,7 +622,7 @@ export default function LearnerCoursesPage() {
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.4, delay: 0.15 }}
-            className="w-72 shrink-0 hidden lg:block"
+            className="w-full lg:w-72 shrink-0"
           >
             <ProfilePanel
               name={profile?.name ?? ""}

@@ -38,6 +38,15 @@ export interface Course {
     instructorId: Principal;
     lessonCount: bigint;
 }
+export interface LearnerCourseReport {
+    completedAt?: Time;
+    learnerPrincipal: Principal;
+    startedAt?: Time;
+    isCompleted: boolean;
+    completedLessons: bigint;
+    enrolledAt: Time;
+    courseId: CourseId;
+}
 export interface QuizAttempt {
     completedAt: Time;
     score: bigint;
@@ -63,15 +72,6 @@ export interface LessonProgress {
     completedAt?: Time;
     isCompleted: boolean;
     courseId: CourseId;
-}
-export interface LearnerCourseReport {
-    learnerPrincipal: Principal;
-    courseId: CourseId;
-    completedLessons: bigint;
-    enrolledAt: Time;
-    startedAt?: Time;
-    completedAt?: Time;
-    isCompleted: boolean;
 }
 export interface UserProfile {
     id: ProfileId;
@@ -104,8 +104,10 @@ export interface backendInterface {
     enrollCourse(arg0: {
         courseId: CourseId;
     }): Promise<void>;
+    enrollLearnerByEmail(courseId: CourseId, email: string): Promise<void>;
     getAllUsers(): Promise<Array<UserProfile>>;
     getCallerUserRole(): Promise<UserRole>;
+    getCourseAttendees(courseId: CourseId): Promise<Array<UserProfile>>;
     getCourseReviews(courseId: CourseId): Promise<Array<Review>>;
     getCourses(): Promise<Array<Course>>;
     getEnrollments(principal: Principal): Promise<Array<Enrollment>>;

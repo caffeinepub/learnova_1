@@ -417,7 +417,9 @@ export default function LessonPlayerPage() {
   const qc = useQueryClient();
   const enabled = !!actor && !isFetching;
 
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(
+    typeof window !== "undefined" && window.innerWidth >= 768,
+  );
   const [marking, setMarking] = useState(false);
   const [showBadgePopup, setShowBadgePopup] = useState(false);
   const [earnedPoints, setEarnedPoints] = useState(0);
@@ -558,7 +560,18 @@ export default function LessonPlayerPage() {
       </header>
 
       {/* ── Body: sidebar + main ── */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* Mobile backdrop overlay */}
+        {sidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/50 z-20 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+            onKeyDown={(e) => e.key === "Escape" && setSidebarOpen(false)}
+            role="button"
+            tabIndex={-1}
+            aria-label="Close sidebar"
+          />
+        )}
         {/* ── Left Sidebar ── */}
         <AnimatePresence initial={false}>
           {sidebarOpen && (
@@ -568,7 +581,7 @@ export default function LessonPlayerPage() {
               animate={{ width: 280, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
               transition={{ duration: 0.25, ease: "easeInOut" }}
-              className="flex-shrink-0 bg-zinc-900 border-r border-zinc-800 flex flex-col overflow-hidden"
+              className="flex-shrink-0 bg-zinc-900 border-r border-zinc-800 flex flex-col overflow-hidden absolute inset-y-0 left-0 z-30 md:relative md:z-auto"
               data-ocid="lesson_player.panel"
             >
               <div
@@ -656,7 +669,7 @@ export default function LessonPlayerPage() {
         {/* ── Main Content Area ── */}
         <main className="flex-1 flex flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto">
-            <div className="max-w-4xl mx-auto px-6 lg:px-10 py-8">
+            <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-10 py-6 sm:py-8">
               <motion.div
                 key={lessonId}
                 initial={{ opacity: 0, y: 16 }}
@@ -675,7 +688,7 @@ export default function LessonPlayerPage() {
                       </span>
                     )}
                   </div>
-                  <h1 className="text-2xl lg:text-3xl font-bold text-white leading-tight">
+                  <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white leading-tight">
                     {lesson.title}
                   </h1>
                   <p className="mt-3 text-sm text-zinc-400 leading-relaxed">
@@ -723,7 +736,7 @@ export default function LessonPlayerPage() {
           </div>
 
           {/* ── Bottom navigation bar ── */}
-          <div className="flex-shrink-0 flex items-center justify-between px-6 py-3 border-t border-zinc-800 bg-zinc-900">
+          <div className="flex-shrink-0 flex items-center justify-between px-3 sm:px-6 py-3 border-t border-zinc-800 bg-zinc-900 gap-1 sm:gap-2">
             <Button
               data-ocid="lesson_player.secondary_button"
               variant="outline"
@@ -734,7 +747,7 @@ export default function LessonPlayerPage() {
                   to: `/learner/courses/${courseId}/lessons/${prevLesson.id}`,
                 })
               }
-              className="border-zinc-700 text-zinc-300 hover:text-white hover:bg-zinc-800 disabled:opacity-30"
+              className="border-zinc-700 text-zinc-300 hover:text-white hover:bg-zinc-800 disabled:opacity-30 text-xs sm:text-sm px-2 sm:px-4"
             >
               <ArrowLeft className="h-4 w-4 mr-1.5" />
               Previous
@@ -774,7 +787,7 @@ export default function LessonPlayerPage() {
                   to: `/learner/courses/${courseId}/lessons/${nextLesson.id}`,
                 })
               }
-              className="bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-30 disabled:bg-blue-600"
+              className="bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-30 disabled:bg-blue-600 text-xs sm:text-sm px-2 sm:px-4"
             >
               Next Content
               <ArrowRight className="h-4 w-4 ml-1.5" />

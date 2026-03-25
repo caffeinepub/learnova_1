@@ -34,7 +34,10 @@ function deriveAppRole(profile: UserProfile | null): AppRole {
   if (!profile) return "guest";
   if (profile.role === UserRole.admin) return "admin";
   if (profile.role === UserRole.user) {
-    if (profile.avatarUrl?.includes("instructor")) return "instructor";
+    const savedRole = localStorage.getItem(
+      `learnova_role_${profile.principal.toString()}`,
+    );
+    if (savedRole === "instructor") return "instructor";
     return "learner";
   }
   return "guest";

@@ -32,6 +32,15 @@ export interface Enrollment {
   'enrolledAt' : Time,
   'courseId' : CourseId,
 }
+export interface LearnerCourseReport {
+  'completedAt' : [] | [Time],
+  'learnerPrincipal' : Principal,
+  'startedAt' : [] | [Time],
+  'isCompleted' : boolean,
+  'completedLessons' : bigint,
+  'enrolledAt' : Time,
+  'courseId' : CourseId,
+}
 export interface LessonProgress {
   'lessonId' : string,
   'completedAt' : [] | [Time],
@@ -84,8 +93,10 @@ export interface _SERVICE {
   'createProfile' : ActorMethod<[CreateUserProfileDto], UserProfile>,
   'doesAdminExist' : ActorMethod<[], boolean>,
   'enrollCourse' : ActorMethod<[{ 'courseId' : CourseId }], undefined>,
+  'enrollLearnerByEmail' : ActorMethod<[CourseId, string], undefined>,
   'getAllUsers' : ActorMethod<[], Array<UserProfile>>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
+  'getCourseAttendees' : ActorMethod<[CourseId], Array<UserProfile>>,
   'getCourseReviews' : ActorMethod<[CourseId], Array<Review>>,
   'getCourses' : ActorMethod<[], Array<Course>>,
   'getEnrollments' : ActorMethod<[Principal], Array<Enrollment>>,
@@ -95,6 +106,7 @@ export interface _SERVICE {
   'getMyLessonProgress' : ActorMethod<[CourseId], Array<LessonProgress>>,
   'getMyPoints' : ActorMethod<[], bigint>,
   'getMyQuizAttempts' : ActorMethod<[CourseId, string], Array<QuizAttempt>>,
+  'getReportingData' : ActorMethod<[], Array<LearnerCourseReport>>,
   'getUserCount' : ActorMethod<[], bigint>,
   'getUserProfile' : ActorMethod<[Principal], UserProfile>,
   'incrementCourseViews' : ActorMethod<[CourseId], undefined>,

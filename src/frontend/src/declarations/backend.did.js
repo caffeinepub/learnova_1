@@ -70,6 +70,15 @@ export const QuizAttempt = IDL.Record({
   'courseId' : CourseId,
   'attemptNumber' : IDL.Nat,
 });
+export const LearnerCourseReport = IDL.Record({
+  'completedAt' : IDL.Opt(Time),
+  'learnerPrincipal' : IDL.Principal,
+  'startedAt' : IDL.Opt(Time),
+  'isCompleted' : IDL.Bool,
+  'completedLessons' : IDL.Nat,
+  'enrolledAt' : Time,
+  'courseId' : CourseId,
+});
 export const UpdateCourseDto = IDL.Record({
   'title' : IDL.Text,
   'duration' : IDL.Nat,
@@ -91,8 +100,14 @@ export const idlService = IDL.Service({
   'createProfile' : IDL.Func([CreateUserProfileDto], [UserProfile], []),
   'doesAdminExist' : IDL.Func([], [IDL.Bool], ['query']),
   'enrollCourse' : IDL.Func([IDL.Record({ 'courseId' : CourseId })], [], []),
+  'enrollLearnerByEmail' : IDL.Func([CourseId, IDL.Text], [], []),
   'getAllUsers' : IDL.Func([], [IDL.Vec(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
+  'getCourseAttendees' : IDL.Func(
+      [CourseId],
+      [IDL.Vec(UserProfile)],
+      ['query'],
+    ),
   'getCourseReviews' : IDL.Func([CourseId], [IDL.Vec(Review)], ['query']),
   'getCourses' : IDL.Func([], [IDL.Vec(Course)], ['query']),
   'getEnrollments' : IDL.Func(
@@ -114,6 +129,7 @@ export const idlService = IDL.Service({
       [IDL.Vec(QuizAttempt)],
       ['query'],
     ),
+  'getReportingData' : IDL.Func([], [IDL.Vec(LearnerCourseReport)], ['query']),
   'getUserCount' : IDL.Func([], [IDL.Nat], ['query']),
   'getUserProfile' : IDL.Func([IDL.Principal], [UserProfile], ['query']),
   'incrementCourseViews' : IDL.Func([CourseId], [], []),
@@ -197,6 +213,15 @@ export const idlFactory = ({ IDL }) => {
     'courseId' : CourseId,
     'attemptNumber' : IDL.Nat,
   });
+  const LearnerCourseReport = IDL.Record({
+    'completedAt' : IDL.Opt(Time),
+    'learnerPrincipal' : IDL.Principal,
+    'startedAt' : IDL.Opt(Time),
+    'isCompleted' : IDL.Bool,
+    'completedLessons' : IDL.Nat,
+    'enrolledAt' : Time,
+    'courseId' : CourseId,
+  });
   const UpdateCourseDto = IDL.Record({
     'title' : IDL.Text,
     'duration' : IDL.Nat,
@@ -218,8 +243,14 @@ export const idlFactory = ({ IDL }) => {
     'createProfile' : IDL.Func([CreateUserProfileDto], [UserProfile], []),
     'doesAdminExist' : IDL.Func([], [IDL.Bool], ['query']),
     'enrollCourse' : IDL.Func([IDL.Record({ 'courseId' : CourseId })], [], []),
+    'enrollLearnerByEmail' : IDL.Func([CourseId, IDL.Text], [], []),
     'getAllUsers' : IDL.Func([], [IDL.Vec(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
+    'getCourseAttendees' : IDL.Func(
+        [CourseId],
+        [IDL.Vec(UserProfile)],
+        ['query'],
+      ),
     'getCourseReviews' : IDL.Func([CourseId], [IDL.Vec(Review)], ['query']),
     'getCourses' : IDL.Func([], [IDL.Vec(Course)], ['query']),
     'getEnrollments' : IDL.Func(
@@ -239,6 +270,11 @@ export const idlFactory = ({ IDL }) => {
     'getMyQuizAttempts' : IDL.Func(
         [CourseId, IDL.Text],
         [IDL.Vec(QuizAttempt)],
+        ['query'],
+      ),
+    'getReportingData' : IDL.Func(
+        [],
+        [IDL.Vec(LearnerCourseReport)],
         ['query'],
       ),
     'getUserCount' : IDL.Func([], [IDL.Nat], ['query']),

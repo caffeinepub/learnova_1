@@ -344,10 +344,12 @@ export default function CourseDetailPage() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Tabs */}
         <Tabs defaultValue="overview">
-          <TabsList data-ocid="course_detail.tab" className="mb-6">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="reviews">Reviews</TabsTrigger>
-          </TabsList>
+          <div className="overflow-x-auto mb-6">
+            <TabsList data-ocid="course_detail.tab" className="w-max">
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="reviews">Reviews</TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* ── Overview Tab ────────────────────────────────────────── */}
           <TabsContent value="overview">
@@ -564,7 +566,7 @@ export default function CourseDetailPage() {
                   data-ocid="reviews.empty_state"
                   className="text-center py-10 text-muted-foreground"
                 >
-                  No reviews yet. Be the first!
+                  No reviews yet. Be the first to add one.
                 </div>
               ) : (
                 (reviews ?? []).map((review, idx) => (

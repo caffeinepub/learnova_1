@@ -1,4 +1,5 @@
 import { QuizTab } from "@/components/QuizTab";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,6 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -37,6 +39,7 @@ import {
   ImageIcon,
   Italic,
   List,
+  Lock,
   Mail,
   MoreHorizontal,
   Paperclip,
@@ -223,7 +226,7 @@ function LessonEditorDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="max-w-2xl w-full p-0 overflow-hidden"
+        className="max-w-2xl w-full p-0 max-h-[90vh] overflow-y-auto"
         data-ocid="lesson_editor.dialog"
       >
         <DialogHeader className="px-6 pt-6 pb-0">
@@ -657,6 +660,363 @@ function LessonEditorDialog({
   );
 }
 
+// ---------------------------------------------------------------------------
+// Add Attendees Dialog
+// ---------------------------------------------------------------------------
+interface AttendeeDialogProps {
+  open: boolean;
+  onClose: () => void;
+  courseId: string;
+  actor: any;
+}
+
+function AddAttendeesDialog({
+  open,
+  onClose,
+  courseId,
+  actor,
+}: AttendeeDialogProps) {
+  const [email, setEmail] = useState("");
+  const [enrolling, setEnrolling] = useState(false);
+  const [enrollError, setEnrollError] = useState<string | null>(null);
+  const [enrollSuccess, setEnrollSuccess] = useState(false);
+  const [attendees, setAttendees] = useState<any[]>([]);
+  const [loadingAttendees, setLoadingAttendees] = useState(false);
+
+  const isNewCourse = courseId === "new";
+
+  const fetchAttendees = async () => {
+    if (!actor || isNewCourse) return;
+    setLoadingAttendees(true);
+    try {
+      const result = await actor.getCourseAttendees(BigInt(courseId));
+      setAttendees(result);
+    } catch {
+      // ignore
+    } finally {
+      setLoadingAttendees(false);
+    }
+  };
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional
+  useEffect(() => {
+    if (open) fetchAttendees();
+  }, [open, actor, courseId]);
+
+  const handleEnroll = async () => {
+    if (!actor || !email.trim() || isNewCourse) return;
+    setEnrolling(true);
+    setEnrollError(null);
+    setEnrollSuccess(false);
+    try {
+      await actor.enrollLearnerByEmail(BigInt(courseId), email.trim());
+      setEnrollSuccess(true);
+      setEmail("");
+      fetchAttendees();
+    } catch (e: any) {
+      setEnrollError(e?.message ?? "Failed to enroll learner.");
+    } finally {
+      setEnrolling(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserPlus className="w-5 h-5 text-primary" />
+            Add Attendees
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {isNewCourse && (
+            <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+              Save the course first before adding attendees.
+            </div>
+          )}
+
+          {/* Email form */}
+          <div className="space-y-2">
+            <Label htmlFor="attendee-email">Learner Email</Label>
+            <div className="flex gap-2">
+              <Input
+                id="attendee-email"
+                type="email"
+                placeholder="learner@example.com"
+                value={email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setEnrollError(null);
+                  setEnrollSuccess(false);
+                }}
+                onKeyDown={(e) => e.key === "Enter" && handleEnroll()}
+                disabled={isNewCourse || enrolling}
+                data-ocid="attendees.input"
+              />
+              <Button
+                onClick={handleEnroll}
+                disabled={isNewCourse || enrolling || !email.trim()}
+                data-ocid="attendees.submit_button"
+                className="shrink-0"
+              >
+                {enrolling ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin mr-2" />
+                    Enrolling…
+                  </>
+                ) : (
+                  "Enroll"
+                )}
+              </Button>
+            </div>
+
+            {enrollSuccess && (
+              <p
+                className="text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1"
+                data-ocid="attendees.success_state"
+              >
+                ✓ Learner enrolled successfully!
+              </p>
+            )}
+            {enrollError && (
+              <p
+                className="text-sm text-destructive"
+                data-ocid="attendees.error_state"
+              >
+                {enrollError}
+              </p>
+            )}
+          </div>
+
+          {/* Attendees list */}
+          <div>
+            <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+              Enrolled Attendees
+            </h4>
+            {loadingAttendees ? (
+              <div
+                className="flex items-center gap-2 text-sm text-muted-foreground py-4"
+                data-ocid="attendees.loading_state"
+              >
+                <span className="w-4 h-4 border-2 border-muted border-t-primary rounded-full animate-spin" />
+                Loading attendees…
+              </div>
+            ) : attendees.length === 0 ? (
+              <div
+                className="text-sm text-muted-foreground text-center py-6 border border-dashed rounded-lg"
+                data-ocid="attendees.empty_state"
+              >
+                No attendees yet
+              </div>
+            ) : (
+              <ScrollArea className="max-h-52">
+                <div className="space-y-2" data-ocid="attendees.list">
+                  {attendees.map((a, i) => (
+                    <div
+                      key={a.id ?? i}
+                      className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-muted/50 transition-colors"
+                      data-ocid={`attendees.item.${i + 1}`}
+                    >
+                      <Avatar className="w-8 h-8">
+                        <AvatarFallback className="text-xs bg-primary/10 text-primary">
+                          {(a.name ?? "?").slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {a.name || "Unknown"}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {a.email || ""}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={onClose}
+            data-ocid="attendees.close_button"
+          >
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Contact Attendees Dialog
+// ---------------------------------------------------------------------------
+function ContactAttendeesDialog({
+  open,
+  onClose,
+  courseId,
+  actor,
+}: AttendeeDialogProps) {
+  const [attendees, setAttendees] = useState<any[]>([]);
+  const [loadingAttendees, setLoadingAttendees] = useState(false);
+
+  const isNewCourse = courseId === "new";
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentional
+  useEffect(() => {
+    if (!open || !actor || isNewCourse) return;
+    setLoadingAttendees(true);
+    actor
+      .getCourseAttendees(BigInt(courseId))
+      .then((r: any[]) => setAttendees(r))
+      .catch(() => {})
+      .finally(() => setLoadingAttendees(false));
+  }, [open, actor, courseId]);
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Mail className="w-5 h-5 text-primary" />
+            Contact Attendees
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {/* Upgrade banner */}
+          <div
+            className="rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 px-4 py-4 flex gap-3"
+            data-ocid="contact.panel"
+          >
+            <div className="shrink-0 mt-0.5">
+              <Lock className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div className="space-y-1 flex-1">
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                Email requires a paid plan
+              </p>
+              <p className="text-sm text-amber-700 dark:text-amber-400">
+                Upgrade your plan to send emails directly to your enrolled
+                learners.
+              </p>
+              <a
+                href="https://caffeine.ai"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-sm font-medium text-amber-700 dark:text-amber-300 underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-100 transition-colors mt-1"
+                data-ocid="contact.link"
+              >
+                Upgrade Plan →
+              </a>
+            </div>
+          </div>
+
+          {/* Attendees list */}
+          <div>
+            <h4 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+              Enrolled Attendees
+            </h4>
+            {loadingAttendees ? (
+              <div
+                className="flex items-center gap-2 text-sm text-muted-foreground py-4"
+                data-ocid="contact.loading_state"
+              >
+                <span className="w-4 h-4 border-2 border-muted border-t-primary rounded-full animate-spin" />
+                Loading attendees…
+              </div>
+            ) : attendees.length === 0 ? (
+              <div
+                className="text-sm text-muted-foreground text-center py-4 border border-dashed rounded-lg"
+                data-ocid="contact.empty_state"
+              >
+                No attendees yet
+              </div>
+            ) : (
+              <ScrollArea className="max-h-40">
+                <div className="space-y-2">
+                  {attendees.map((a, i) => (
+                    <div
+                      key={a.id ?? i}
+                      className="flex items-center gap-3 rounded-lg px-3 py-2 hover:bg-muted/50 transition-colors"
+                      data-ocid={`contact.item.${i + 1}`}
+                    >
+                      <Avatar className="w-8 h-8">
+                        <AvatarFallback className="text-xs bg-primary/10 text-primary">
+                          {(a.name ?? "?").slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {a.name || "Unknown"}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {a.email || ""}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            )}
+          </div>
+
+          {/* Compose form - disabled */}
+          <div className="space-y-3 opacity-50 pointer-events-none select-none">
+            <div className="space-y-1.5">
+              <Label htmlFor="contact-subject">Subject</Label>
+              <Input
+                id="contact-subject"
+                placeholder="Email subject…"
+                disabled
+                title="Email sending requires a paid plan"
+                data-ocid="contact.input"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="contact-message">Message</Label>
+              <Textarea
+                id="contact-message"
+                placeholder="Write your message to attendees…"
+                rows={4}
+                disabled
+                title="Email sending requires a paid plan"
+                data-ocid="contact.textarea"
+              />
+            </div>
+          </div>
+
+          <Button
+            disabled
+            className="w-full"
+            title="Email sending requires a paid plan"
+            data-ocid="contact.submit_button"
+          >
+            <Lock className="w-4 h-4 mr-2" />
+            Send to All (Requires Paid Plan)
+          </Button>
+        </div>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={onClose}
+            data-ocid="contact.close_button"
+          >
+            Close
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function CourseEditPage() {
   const navigate = useNavigate();
   const params = useParams({ strict: false }) as { courseId?: string };
@@ -688,6 +1048,8 @@ export default function CourseEditPage() {
 
   const [lessons, setLessons] = useState<Lesson[]>(SEED_LESSONS);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [showAddAttendees, setShowAddAttendees] = useState(false);
+  const [showContactAttendees, setShowContactAttendees] = useState(false);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -829,6 +1191,7 @@ export default function CourseEditPage() {
               size="sm"
               className="h-8 text-xs hidden md:flex gap-1.5"
               data-ocid="course_edit.attendees.secondary_button"
+              onClick={() => setShowAddAttendees(true)}
             >
               <UserPlus className="w-3.5 h-3.5" /> Add Attendees
             </Button>
@@ -837,6 +1200,7 @@ export default function CourseEditPage() {
               size="sm"
               className="h-8 text-xs hidden md:flex gap-1.5"
               data-ocid="course_edit.contact.secondary_button"
+              onClick={() => setShowContactAttendees(true)}
             >
               <Mail className="w-3.5 h-3.5" /> Contact Attendees
             </Button>
@@ -1045,36 +1409,38 @@ export default function CourseEditPage() {
           </div>
 
           <Tabs defaultValue="content" data-ocid="course_edit.panel">
-            <TabsList className="h-10 bg-muted/60 border border-border">
-              <TabsTrigger
-                value="content"
-                className="gap-1.5 text-xs sm:text-sm"
-                data-ocid="course_edit.content.tab"
-              >
-                <BookOpen className="w-3.5 h-3.5" /> Content
-              </TabsTrigger>
-              <TabsTrigger
-                value="description"
-                className="gap-1.5 text-xs sm:text-sm"
-                data-ocid="course_edit.description.tab"
-              >
-                <FileText className="w-3.5 h-3.5" /> Description
-              </TabsTrigger>
-              <TabsTrigger
-                value="options"
-                className="gap-1.5 text-xs sm:text-sm"
-                data-ocid="course_edit.options.tab"
-              >
-                <Settings className="w-3.5 h-3.5" /> Options
-              </TabsTrigger>
-              <TabsTrigger
-                value="quiz"
-                className="gap-1.5 text-xs sm:text-sm"
-                data-ocid="course_edit.quiz.tab"
-              >
-                <HelpCircle className="w-3.5 h-3.5" /> Quiz
-              </TabsTrigger>
-            </TabsList>
+            <div className="overflow-x-auto">
+              <TabsList className="h-10 bg-muted/60 border border-border w-max">
+                <TabsTrigger
+                  value="content"
+                  className="gap-1.5 text-xs sm:text-sm"
+                  data-ocid="course_edit.content.tab"
+                >
+                  <BookOpen className="w-3.5 h-3.5" /> Content
+                </TabsTrigger>
+                <TabsTrigger
+                  value="description"
+                  className="gap-1.5 text-xs sm:text-sm"
+                  data-ocid="course_edit.description.tab"
+                >
+                  <FileText className="w-3.5 h-3.5" /> Description
+                </TabsTrigger>
+                <TabsTrigger
+                  value="options"
+                  className="gap-1.5 text-xs sm:text-sm"
+                  data-ocid="course_edit.options.tab"
+                >
+                  <Settings className="w-3.5 h-3.5" /> Options
+                </TabsTrigger>
+                <TabsTrigger
+                  value="quiz"
+                  className="gap-1.5 text-xs sm:text-sm"
+                  data-ocid="course_edit.quiz.tab"
+                >
+                  <HelpCircle className="w-3.5 h-3.5" /> Quiz
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
             {/* Content tab */}
             <TabsContent value="content" className="mt-4">
@@ -1105,12 +1471,8 @@ export default function CourseEditPage() {
                       <div className="w-14 h-14 rounded-xl bg-muted flex items-center justify-center mb-3">
                         <BookOpen className="w-6 h-6 text-muted-foreground" />
                       </div>
-                      <p className="text-sm font-medium text-foreground">
-                        No lessons yet
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1 max-w-xs">
-                        Click "Add Content" to create your first lesson — video,
-                        document, or image.
+                      <p className="text-sm text-muted-foreground mt-2">
+                        No lessons yet. Click Add Content to get started.
                       </p>
                     </div>
                   ) : (
@@ -1423,6 +1785,22 @@ export default function CourseEditPage() {
           </a>
         </p>
       </footer>
+
+      {/* Add Attendees Dialog */}
+      <AddAttendeesDialog
+        open={showAddAttendees}
+        onClose={() => setShowAddAttendees(false)}
+        courseId={courseId}
+        actor={actor}
+      />
+
+      {/* Contact Attendees Dialog */}
+      <ContactAttendeesDialog
+        open={showContactAttendees}
+        onClose={() => setShowContactAttendees(false)}
+        courseId={courseId}
+        actor={actor}
+      />
 
       <LessonEditorDialog
         open={editorOpen}

@@ -107,11 +107,11 @@ export default function AdminUsersPage() {
 
       <Card className="shadow-card">
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <CardTitle className="text-base flex items-center gap-2">
               <Users className="h-4 w-4" /> All Users
             </CardTitle>
-            <div className="relative w-64">
+            <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search by name or email..."

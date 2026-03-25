@@ -141,7 +141,7 @@ export default function HomePage() {
           )}
         </div>
 
-        <div className="max-w-4xl mx-auto mt-16 grid grid-cols-3 gap-6 text-center">
+        <div className="max-w-4xl mx-auto mt-16 grid grid-cols-2 sm:grid-cols-3 gap-6 text-center">
           {[
             {
               icon: <BookOpen className="h-6 w-6" />,
