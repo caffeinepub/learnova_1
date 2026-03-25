@@ -16,7 +16,7 @@ import { useRegisterProfile } from "../hooks/useQueries";
 
 interface Props {
   open: boolean;
-  onSuccess: () => void;
+  onSuccess: () => Promise<void>;
 }
 
 type RoleChoice = "learner" | "instructor";
@@ -48,7 +48,7 @@ export default function RegisterModal({ open, onSuccess }: Props) {
       // Clear pending role
       localStorage.removeItem("learnova_pending_role");
       toast.success("Profile created! Welcome to LearnOva.");
-      onSuccess();
+      await onSuccess();
     } catch {
       toast.error("Failed to create profile. Please try again.");
     }

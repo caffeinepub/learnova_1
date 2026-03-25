@@ -108,7 +108,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const handleLogout = () => {
     logout();
-    navigate({ to: "/login" });
   };
 
   return (

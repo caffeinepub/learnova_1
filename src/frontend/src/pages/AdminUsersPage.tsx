@@ -31,16 +31,16 @@ import {
 } from "@/components/ui/table";
 import {
   AlertTriangle,
+  Loader2,
   Search,
   ShieldCheck,
   Trash2,
   Users,
 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useAuthContext } from "../contexts/AuthContext";
-import * as localDb from "../lib/localDb";
-import type { LcUser } from "../lib/localDb";
+import { type LocalUser, useGlobalAuth } from "../hooks/useGlobalAuth";
 
 type DisplayRole = "admin" | "instructor" | "learner";
 
@@ -57,11 +57,22 @@ function RoleBadge({ role }: { role: DisplayRole }) {
 
 export default function AdminUsersPage() {
   const { logout } = useAuthContext();
+  const { getAllUsers, updateUserRole, deleteUser } = useGlobalAuth();
   const [search, setSearch] = useState("");
-  const [, forceUpdate] = useState(0);
+  const [users, setUsers] = useState<LocalUser[]>([]);
+  const [loading, setLoading] = useState(true);
   const [resetting, setResetting] = useState(false);
 
-  const users = localDb.getUsers();
+  const loadUsers = useCallback(async () => {
+    setLoading(true);
+    const result = await getAllUsers();
+    setUsers(result);
+    setLoading(false);
+  }, [getAllUsers]);
+
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
 
   const filtered = users.filter(
     (u) =>
@@ -69,46 +80,39 @@ export default function AdminUsersPage() {
       u.email.toLowerCase().includes(search.toLowerCase()),
   );
 
-  const handleRoleChange = (user: LcUser, newRole: DisplayRole) => {
-    localDb.updateUserRole(user.id, newRole);
-    toast.success(`Updated ${user.name}'s role to ${newRole}`);
-    forceUpdate((n) => n + 1);
+  const handleRoleChange = async (user: LocalUser, newRole: DisplayRole) => {
+    const result = await updateUserRole(user.id, newRole);
+    if (result.success) {
+      toast.success(`Updated ${user.name}'s role to ${newRole}`);
+      await loadUsers();
+    } else {
+      toast.error(result.error ?? "Failed to update role");
+    }
   };
 
-  const handleDeleteUser = (user: LcUser) => {
-    if (user.id === "default-admin-001") {
-      toast.error("Cannot delete the default admin account.");
-      return;
+  const handleDeleteUser = async (user: LocalUser) => {
+    const result = await deleteUser(user.id);
+    if (result.success) {
+      toast.success(`Deleted ${user.name}`);
+      await loadUsers();
+    } else {
+      toast.error(result.error ?? "Failed to delete user");
     }
-    localDb.deleteUser(user.id);
-    toast.success(`Deleted ${user.name}`);
-    forceUpdate((n) => n + 1);
   };
 
   const handleResetDatabase = () => {
     setResetting(true);
+    // Clear all localStorage learnova_ keys except session
     const keysToRemove: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key?.startsWith("learnova_") && key !== "learnova_users") {
+      if (key?.startsWith("learnova_") && key !== "learnova_session") {
         keysToRemove.push(key);
       }
     }
     for (const key of keysToRemove) {
       localStorage.removeItem(key);
     }
-    localStorage.setItem(
-      "learnova_users",
-      JSON.stringify([
-        {
-          id: "default-admin-001",
-          email: "admin@learnova.com",
-          password: "admin123",
-          name: "Admin",
-          role: "admin",
-        },
-      ]),
-    );
     toast.success("Database reset successfully. Logging out...");
     setTimeout(() => {
       logout();
@@ -133,7 +137,7 @@ export default function AdminUsersPage() {
             User Management
           </h1>
           <p className="text-muted-foreground mt-1">
-            {users.length} total users registered
+            {loading ? "Loading..." : `${users.length} total users registered`}
           </p>
         </div>
       </div>
@@ -157,7 +161,15 @@ export default function AdminUsersPage() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          {filtered.length === 0 ? (
+          {loading ? (
+            <div
+              className="py-16 text-center text-muted-foreground"
+              data-ocid="admin_users.loading_state"
+            >
+              <Loader2 className="h-8 w-8 mx-auto mb-3 opacity-40 animate-spin" />
+              <p className="font-medium">Loading users...</p>
+            </div>
+          ) : filtered.length === 0 ? (
             <div
               className="py-16 text-center text-muted-foreground"
               data-ocid="admin_users.empty_state"
@@ -222,7 +234,7 @@ export default function AdminUsersPage() {
                         >
                           <SelectTrigger
                             className="w-36"
-                            data-ocid={`admin_users.role.select.${idx + 1}`}
+                            data-ocid={`admin_users.select.${idx + 1}`}
                           >
                             <SelectValue />
                           </SelectTrigger>
@@ -240,7 +252,6 @@ export default function AdminUsersPage() {
                           size="sm"
                           variant="ghost"
                           className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                          disabled={user.id === "default-admin-001"}
                           onClick={() => handleDeleteUser(user)}
                           data-ocid={`admin_users.delete_button.${idx + 1}`}
                         >

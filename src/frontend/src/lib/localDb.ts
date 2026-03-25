@@ -1,13 +1,5 @@
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-export interface LcUser {
-  id: string;
-  email: string;
-  password: string;
-  name: string;
-  role: "admin" | "instructor" | "learner";
-}
-
 export interface LcLesson {
   id: string;
   title: string;
@@ -92,7 +84,6 @@ export interface LcQuizAttempt {
 // ─── Storage Keys ────────────────────────────────────────────────────────────
 
 const KEYS = {
-  users: "learnova_users",
   courses: "learnova_courses",
   enrollments: "learnova_enrollments",
   reviews: "learnova_reviews",
@@ -116,31 +107,24 @@ function save<T>(key: string, data: T): void {
   localStorage.setItem(key, JSON.stringify(data));
 }
 
-// ─── Users (read-only from auth storage) ─────────────────────────────────────
+// ─── Users (stubs — user data is now managed by the backend) ─────────────────
 
-export function getUsers(): LcUser[] {
-  return load<LcUser[]>(KEYS.users, []);
+export interface LcUser {
+  id: string;
+  email: string;
+  name: string;
+  role: "admin" | "instructor" | "learner";
 }
 
-export function getUserById(id: string): LcUser | undefined {
-  return getUsers().find((u) => u.id === id);
+/** @deprecated User data is now in the backend. Always returns undefined. */
+export function getUserById(_id: string): LcUser | undefined {
+  return undefined;
 }
 
-export function getUserByEmail(email: string): LcUser | undefined {
-  return getUsers().find((u) => u.email.toLowerCase() === email.toLowerCase());
+/** @deprecated User data is now in the backend. Always returns undefined. */
+export function getUserByEmail(_email: string): LcUser | undefined {
+  return undefined;
 }
-
-export function updateUserRole(userId: string, role: LcUser["role"]): void {
-  const users = getUsers().map((u) => (u.id === userId ? { ...u, role } : u));
-  save(KEYS.users, users);
-}
-
-export function deleteUser(userId: string): void {
-  if (userId === "default-admin-001") return;
-  const users = getUsers().filter((u) => u.id !== userId);
-  save(KEYS.users, users);
-}
-
 // ─── Courses ─────────────────────────────────────────────────────────────────
 
 export function getCourses(): LcCourse[] {
@@ -391,23 +375,30 @@ export interface ReportRow {
   totalLessons: number;
 }
 
-export function getReportingData(instructorId?: string): ReportRow[] {
+export interface ReportUser {
+  id: string;
+  name: string;
+  email: string;
+}
+
+export function getReportingData(
+  instructorId?: string,
+  users?: ReportUser[],
+): ReportRow[] {
   const courses = instructorId
     ? getInstructorCourses(instructorId)
     : getCourses();
   const enrollments = getEnrollments();
-  const users = getUsers();
 
   const rows: ReportRow[] = [];
   for (const enrollment of enrollments) {
     const course = courses.find((c) => c.id === enrollment.courseId);
     if (!course) continue;
-    const user = users.find((u) => u.id === enrollment.userId);
-    if (!user) continue;
+    const user = users?.find((u) => u.id === enrollment.userId);
     rows.push({
-      userId: user.id,
-      userName: user.name,
-      userEmail: user.email,
+      userId: enrollment.userId,
+      userName: user?.name ?? enrollment.userId,
+      userEmail: user?.email ?? "",
       courseId: course.id,
       courseTitle: course.title,
       enrolledAt: enrollment.enrolledAt,

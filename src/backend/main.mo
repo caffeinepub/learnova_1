@@ -5,10 +5,11 @@ import Time "mo:core/Time";
 import Principal "mo:core/Principal";
 import Array "mo:core/Array";
 import Nat "mo:core/Nat";
+import Text "mo:core/Text";
 import MixinAuthorization "authorization/MixinAuthorization";
 import AccessControl "authorization/access-control";
 
-persistent actor {
+actor {
   let accessControlState = AccessControl.initState();
   include MixinAuthorization(accessControlState);
 
@@ -36,6 +37,209 @@ persistent actor {
   public type UpdateUserProfileDto = {
     name : Text;
     email : Text;
+  };
+
+  // New: Email users system
+  public type EmailUser = {
+    id : Text;
+    email : Text;
+    password : Text;
+    name : Text;
+    role : Text;
+    createdAt : Time.Time;
+  };
+
+  // Public type without password for safe exposure
+  public type EmailUserPublic = {
+    id : Text;
+    email : Text;
+    name : Text;
+    role : Text;
+    createdAt : Time.Time;
+  };
+
+  type EmailUsers = Map.Map<Text, EmailUser>;
+  var emailUsers : EmailUsers = Map.empty<Text, EmailUser>();
+
+  func getEmailUserInternal(id : Text) : EmailUser {
+    switch (emailUsers.get(id)) {
+      case (null) { Runtime.trap("Email user not found") };
+      case (?user) { user };
+    };
+  };
+
+  func toPublicEmailUser(user : EmailUser) : EmailUserPublic {
+    {
+      id = user.id;
+      email = user.email;
+      name = user.name;
+      role = user.role;
+      createdAt = user.createdAt;
+    };
+  };
+
+  // New: Seed default email admin on first use
+  let defaultAdminId = "default-admin-001";
+  func seedDefaultAdminIfNeeded() {
+    if (not emailUsers.containsKey(defaultAdminId)) {
+      let defaultUser : EmailUser = {
+        id = defaultAdminId;
+        email = "admin@learnova.com";
+        password = "admin123";
+        name = "Admin";
+        role = "admin";
+        createdAt = Time.now();
+      };
+      emailUsers.add(defaultAdminId, defaultUser);
+    };
+  };
+
+  // New: Register email user
+  public shared ({ caller }) func registerEmailUser(email : Text, password : Text, name : Text, role : Text) : async {
+    #ok : EmailUserPublic;
+    #err : Text;
+  } {
+    // Authorization: Only admins can assign roles other than "learner"
+    // Non-admins can only register as "learner"
+    let isCallerAdmin = isRegisteredInternal(caller) and AccessControl.isAdmin(accessControlState, caller);
+
+    let finalRole = if (role == "learner") {
+      "learner";
+    } else {
+      // Attempting to register as admin or instructor
+      if (not isCallerAdmin) {
+        return #err("Unauthorized: Only admins can register users with admin or instructor roles");
+      };
+      role;
+    };
+
+    if (email == "") { return #err("Email must not be empty") };
+    if (not email.contains(#char '@')) { return #err("Invalid email. Email must contain a '@' character") };
+    if (email.size() <= 3) { return #err("Email must be at least 3 characters") };
+    if (password == "") { return #err("Password must not be empty") };
+    if (not ("admin".lessOrEqual(finalRole) or "instructor".lessOrEqual(finalRole) or "learner".lessOrEqual(finalRole))) {
+      return #err("Role must be one of 'admin', 'instructor', 'learner'");
+    };
+    switch (emailUsers.values().find(func(u) { u.email == email })) {
+      case (null) {};
+      case (_) { return #err("Email already exists") };
+    };
+    let newUser : EmailUser = {
+      id = email;
+      email;
+      password;
+      name;
+      role = finalRole;
+      createdAt = Time.now();
+    };
+    seedDefaultAdminIfNeeded();
+    emailUsers.add(email, newUser);
+    #ok(toPublicEmailUser(newUser));
+  };
+
+  // New: Login email user - returns public user info without password
+  public query ({ caller }) func loginEmailUser(email : Text, password : Text) : async {
+    #ok : EmailUserPublic;
+    #err : Text;
+  } {
+    switch (emailUsers.values().find(func(u) { u.email == email })) {
+      case (null) { #err("User not found for email " # email) };
+      case (?user) {
+        if (user.password != password) { #err("Invalid credentials") } else {
+          #ok(toPublicEmailUser(user));
+        };
+      };
+    };
+  };
+
+  // New: Get all email users - ADMIN ONLY, no passwords exposed
+  public query ({ caller }) func getAllEmailUsers() : async [EmailUserPublic] {
+    if (not (AccessControl.isAdmin(accessControlState, caller))) {
+      Runtime.trap("Unauthorized: Only admins can view all email users");
+    };
+    seedDefaultAdminIfNeeded();
+    emailUsers.values().map(toPublicEmailUser).toArray();
+  };
+
+  // New: Get email user by ID - ADMIN ONLY or SELF, no password exposed
+  public query ({ caller }) func getEmailUserById(id : Text) : async {
+    #ok : EmailUserPublic;
+    #err : Text;
+  } {
+    switch (emailUsers.get(id)) {
+      case (null) { #err("Email user not found") };
+      case (?user) {
+        // Allow access if caller is admin or if viewing own profile (by email match)
+        let isCallerAdmin = isRegisteredInternal(caller) and AccessControl.isAdmin(accessControlState, caller);
+        let isOwnProfile = if (isRegisteredInternal(caller)) {
+          let callerProfile = getOrTrap(caller);
+          callerProfile.email == user.email;
+        } else {
+          false;
+        };
+
+        if (not (isCallerAdmin or isOwnProfile)) {
+          Runtime.trap("Unauthorized: Can only view your own profile or must be admin");
+        };
+
+        #ok(toPublicEmailUser(user));
+      };
+    };
+  };
+
+  // New: Update email user role - ADMIN ONLY
+  public shared ({ caller }) func updateEmailUserRole(id : Text, role : Text) : async {
+    #ok;
+    #err : Text;
+  } {
+    if (not (AccessControl.isAdmin(accessControlState, caller))) {
+      Runtime.trap("Unauthorized: Only admins can update user roles");
+    };
+
+    if (not ("admin".lessOrEqual(role) or "instructor".lessOrEqual(role) or "learner".lessOrEqual(role))) {
+      return #err("Role must be one of 'admin', 'instructor', 'learner'");
+    };
+
+    switch (emailUsers.get(id)) {
+      case (null) { #err("Email user not found") };
+      case (?user) {
+        emailUsers.add(id, { user with role });
+        #ok;
+      };
+    };
+  };
+
+  // New: Delete email user - ADMIN ONLY
+  public shared ({ caller }) func deleteEmailUser(id : Text) : async {
+    #ok;
+    #err : Text;
+  } {
+    if (not (AccessControl.isAdmin(accessControlState, caller))) {
+      Runtime.trap("Unauthorized: Only admins can delete email users");
+    };
+
+    // Prevent deleting default admin
+    if (id == defaultAdminId) { return #err("Cannot delete default admin") };
+    ignore getEmailUserInternal(id);
+    emailUsers.remove(id);
+    #ok;
+  };
+
+  // New: Reset email users - ADMIN ONLY
+  public shared ({ caller }) func resetEmailUsers() : async () {
+    if (not (AccessControl.isAdmin(accessControlState, caller))) {
+      Runtime.trap("Unauthorized: Only admins can reset email users");
+    };
+
+    let defaultUser : EmailUser = {
+      id = defaultAdminId;
+      email = "admin@learnova.com";
+      password = "admin123";
+      name = "Admin";
+      role = "admin";
+      createdAt = Time.now();
+    };
+    emailUsers := Map.fromIter([(defaultAdminId, defaultUser)].values());
   };
 
   public shared ({ caller }) func createProfile(createProfileDto : CreateUserProfileDto) : async UserProfile {
@@ -742,5 +946,7 @@ persistent actor {
     reviews := Map.empty<CourseId, Map.Map<Principal, Review>>();
     points := Map.empty<Principal, Nat>();
     badges := Map.empty<Principal, [Badge]>();
+    emailUsers := Map.empty<Text, EmailUser>();
+    seedDefaultAdminIfNeeded();
   };
 };

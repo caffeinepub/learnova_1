@@ -1,40 +1,36 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { Link, Navigate, useNavigate, useSearch } from "@tanstack/react-router";
 import { GraduationCap, Loader2, ShieldCheck } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useAuthContext } from "../contexts/AuthContext";
 
 export default function LoginPage() {
-  const { login, resetAllAccounts, isAuthenticated, role } = useAuthContext();
-  const navigate = useNavigate();
+  const { login, resetAllAccounts, isAuthenticated, role, loginWithII } =
+    useAuthContext();
   const search = useSearch({ strict: false }) as { redirect?: string };
+  const navigate = useNavigate();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // If already authenticated, redirect to the right dashboard immediately
-  useEffect(() => {
-    if (isAuthenticated) {
-      if (search.redirect) {
-        navigate({ to: search.redirect as any });
-      } else if (role === "admin" || role === "instructor") {
-        navigate({ to: "/instructor/courses" });
-      } else {
-        navigate({ to: "/learner/courses" });
-      }
-    }
-  }, [isAuthenticated, role, navigate, search.redirect]);
+  // Render-time guard: if already authenticated, redirect immediately
+  if (isAuthenticated) {
+    if (search.redirect) return <Navigate to={search.redirect as any} />;
+    if (role === "admin" || role === "instructor")
+      return <Navigate to="/instructor/courses" />;
+    return <Navigate to="/learner/courses" />;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setIsLoading(true);
     await new Promise((r) => setTimeout(r, 300));
-    const result = login(email.trim(), password);
+    const result = await login(email.trim(), password);
     setIsLoading(false);
     if (!result.success) {
       setError(result.error ?? "Login failed.");
@@ -54,7 +50,7 @@ export default function LoginPage() {
       "This will delete all custom accounts (the default admin is kept). Continue?",
     );
     if (confirmed) {
-      resetAllAccounts();
+      void resetAllAccounts();
     }
   };
 
@@ -189,7 +185,14 @@ export default function LoginPage() {
               />
             </div>
 
-            {error && <p className="text-sm text-destructive">{error}</p>}
+            {error && (
+              <p
+                className="text-sm text-destructive"
+                data-ocid="login.error_state"
+              >
+                {error}
+              </p>
+            )}
 
             <Button
               type="submit"
@@ -209,6 +212,31 @@ export default function LoginPage() {
             </Button>
           </form>
 
+          {/* Internet Identity divider */}
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">
+                or
+              </span>
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className="w-full"
+            onClick={loginWithII}
+            disabled={isLoading}
+            data-ocid="login.secondary_button"
+          >
+            <ShieldCheck className="mr-2 h-4 w-4" />
+            Sign in with Internet Identity
+          </Button>
+
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-border" />
@@ -225,7 +253,7 @@ export default function LoginPage() {
               variant="outline"
               size="lg"
               className="w-full"
-              data-ocid="login.secondary_button"
+              data-ocid="login.link"
             >
               Create an account
             </Button>

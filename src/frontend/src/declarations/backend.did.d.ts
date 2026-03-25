@@ -25,6 +25,13 @@ export interface Course {
 export type CourseId = bigint;
 export interface CreateCourseDto { 'title' : string }
 export interface CreateUserProfileDto { 'name' : string, 'email' : string }
+export interface EmailUserPublic {
+  'id' : string,
+  'name' : string,
+  'createdAt' : Time,
+  'role' : string,
+  'email' : string,
+}
 export interface Enrollment {
   'completedAt' : [] | [Time],
   'principal' : Principal,
@@ -91,14 +98,25 @@ export interface _SERVICE {
   'completeCourse' : ActorMethod<[CourseId], undefined>,
   'createCourse' : ActorMethod<[CreateCourseDto], Course>,
   'createProfile' : ActorMethod<[CreateUserProfileDto], UserProfile>,
+  'deleteEmailUser' : ActorMethod<
+    [string],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
   'doesAdminExist' : ActorMethod<[], boolean>,
   'enrollCourse' : ActorMethod<[{ 'courseId' : CourseId }], undefined>,
   'enrollLearnerByEmail' : ActorMethod<[CourseId, string], undefined>,
+  'getAllEmailUsers' : ActorMethod<[], Array<EmailUserPublic>>,
   'getAllUsers' : ActorMethod<[], Array<UserProfile>>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getCourseAttendees' : ActorMethod<[CourseId], Array<UserProfile>>,
   'getCourseReviews' : ActorMethod<[CourseId], Array<Review>>,
   'getCourses' : ActorMethod<[], Array<Course>>,
+  'getEmailUserById' : ActorMethod<
+    [string],
+    { 'ok' : EmailUserPublic } |
+      { 'err' : string }
+  >,
   'getEnrollments' : ActorMethod<[Principal], Array<Enrollment>>,
   'getMyBadges' : ActorMethod<[], Array<Badge>>,
   'getMyCourseCompletions' : ActorMethod<[], Array<Enrollment>>,
@@ -112,7 +130,19 @@ export interface _SERVICE {
   'incrementCourseViews' : ActorMethod<[CourseId], undefined>,
   'isAdmin' : ActorMethod<[], boolean>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
+  'loginEmailUser' : ActorMethod<
+    [string, string],
+    { 'ok' : EmailUserPublic } |
+      { 'err' : string }
+  >,
   'markLessonComplete' : ActorMethod<[CourseId, string], undefined>,
+  'registerEmailUser' : ActorMethod<
+    [string, string, string, string],
+    { 'ok' : EmailUserPublic } |
+      { 'err' : string }
+  >,
+  'resetDatabase' : ActorMethod<[], undefined>,
+  'resetEmailUsers' : ActorMethod<[], undefined>,
   'seedFirstAdmin' : ActorMethod<[], undefined>,
   'setUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'submitQuizAttempt' : ActorMethod<
@@ -121,6 +151,11 @@ export interface _SERVICE {
   >,
   'submitReview' : ActorMethod<[CourseId, bigint, string], undefined>,
   'updateCourse' : ActorMethod<[CourseId, UpdateCourseDto], Course>,
+  'updateEmailUserRole' : ActorMethod<
+    [string, string],
+    { 'ok' : null } |
+      { 'err' : string }
+  >,
   'updateMyProfile' : ActorMethod<[UpdateUserProfileDto], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;

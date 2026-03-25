@@ -1,7 +1,8 @@
 import type React from "react";
 import { createContext, useContext } from "react";
 import type { UserProfile } from "../backend.d";
-import { useLocalAuth } from "../hooks/useLocalAuth";
+import RegisterModal from "../components/RegisterModal";
+import { useGlobalAuth } from "../hooks/useGlobalAuth";
 
 export type AppRole = "admin" | "instructor" | "learner" | "guest";
 
@@ -21,26 +22,28 @@ interface AuthContextValue {
   login: (
     email: string,
     password: string,
-  ) => {
+  ) => Promise<{
     success: boolean;
     role?: "admin" | "instructor" | "learner";
     error?: string;
-  };
+  }>;
   signup: (
     email: string,
     password: string,
     name: string,
     role: "learner" | "instructor",
-  ) => {
+  ) => Promise<{
     success: boolean;
     role?: "admin" | "instructor" | "learner";
     error?: string;
-  };
-  resetAllAccounts: () => void;
+  }>;
+  resetAllAccounts: () => Promise<void>;
   updateLocalUser: (updates: { name?: string; email?: string }) => void;
   userId: string | null;
   userName: string | null;
   userEmail: string | null;
+  loginWithII: () => void;
+  finishIIRegistration: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -54,7 +57,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     login,
     signup,
     resetAllAccounts,
-  } = useLocalAuth();
+    loginWithII,
+    needsIIRegistration,
+    clearIIRegistration,
+    finishIIRegistration,
+  } = useGlobalAuth();
 
   const isAuthenticated = !!currentUser;
 
@@ -89,8 +96,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAuthenticated,
         isLoading: !isInitialized,
         isFetched: isInitialized,
-        showRegisterModal: false,
-        setShowRegisterModal: () => {},
+        showRegisterModal: needsIIRegistration,
+        setShowRegisterModal: clearIIRegistration,
         refetchProfile: () => {},
         logout,
         login,
@@ -100,9 +107,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         userId: currentUser?.id ?? null,
         userName: currentUser?.name ?? null,
         userEmail: currentUser?.email ?? null,
+        loginWithII,
+        finishIIRegistration,
       }}
     >
       {children}
+      <RegisterModal
+        open={needsIIRegistration}
+        onSuccess={finishIIRegistration}
+      />
     </AuthContext.Provider>
   );
 }

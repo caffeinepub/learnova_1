@@ -23,6 +23,13 @@ export interface Enrollment {
     enrolledAt: Time;
     courseId: CourseId;
 }
+export interface EmailUserPublic {
+    id: string;
+    name: string;
+    createdAt: Time;
+    role: string;
+    email: string;
+}
 export interface Badge {
     name: string;
     awardedAt: Time;
@@ -100,16 +107,31 @@ export interface backendInterface {
     completeCourse(courseId: CourseId): Promise<void>;
     createCourse(dto: CreateCourseDto): Promise<Course>;
     createProfile(createProfileDto: CreateUserProfileDto): Promise<UserProfile>;
+    deleteEmailUser(id: string): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
     doesAdminExist(): Promise<boolean>;
     enrollCourse(arg0: {
         courseId: CourseId;
     }): Promise<void>;
     enrollLearnerByEmail(courseId: CourseId, email: string): Promise<void>;
+    getAllEmailUsers(): Promise<Array<EmailUserPublic>>;
     getAllUsers(): Promise<Array<UserProfile>>;
     getCallerUserRole(): Promise<UserRole>;
     getCourseAttendees(courseId: CourseId): Promise<Array<UserProfile>>;
     getCourseReviews(courseId: CourseId): Promise<Array<Review>>;
     getCourses(): Promise<Array<Course>>;
+    getEmailUserById(id: string): Promise<{
+        __kind__: "ok";
+        ok: EmailUserPublic;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
     getEnrollments(principal: Principal): Promise<Array<Enrollment>>;
     getMyBadges(): Promise<Array<Badge>>;
     getMyCourseCompletions(): Promise<Array<Enrollment>>;
@@ -123,11 +145,34 @@ export interface backendInterface {
     incrementCourseViews(id: CourseId): Promise<void>;
     isAdmin(): Promise<boolean>;
     isCallerAdmin(): Promise<boolean>;
+    loginEmailUser(email: string, password: string): Promise<{
+        __kind__: "ok";
+        ok: EmailUserPublic;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
     markLessonComplete(courseId: CourseId, lessonId: string): Promise<void>;
+    registerEmailUser(email: string, password: string, name: string, role: string): Promise<{
+        __kind__: "ok";
+        ok: EmailUserPublic;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
+    resetDatabase(): Promise<void>;
+    resetEmailUsers(): Promise<void>;
     seedFirstAdmin(): Promise<void>;
     setUserRole(user: Principal, role: UserRole): Promise<void>;
     submitQuizAttempt(courseId: CourseId, quizId: string, score: bigint, pointsEarned: bigint): Promise<void>;
     submitReview(courseId: CourseId, rating: bigint, comment: string): Promise<void>;
     updateCourse(id: CourseId, dto: UpdateCourseDto): Promise<Course>;
+    updateEmailUserRole(id: string, role: string): Promise<{
+        __kind__: "ok";
+        ok: null;
+    } | {
+        __kind__: "err";
+        err: string;
+    }>;
     updateMyProfile(updateProfileDto: UpdateUserProfileDto): Promise<void>;
 }

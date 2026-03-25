@@ -41,6 +41,13 @@ export const UserProfile = IDL.Record({
   'email' : IDL.Text,
   'avatarUrl' : IDL.Text,
 });
+export const EmailUserPublic = IDL.Record({
+  'id' : IDL.Text,
+  'name' : IDL.Text,
+  'createdAt' : Time,
+  'role' : IDL.Text,
+  'email' : IDL.Text,
+});
 export const Review = IDL.Record({
   'principal' : IDL.Principal,
   'createdAt' : Time,
@@ -98,9 +105,15 @@ export const idlService = IDL.Service({
   'completeCourse' : IDL.Func([CourseId], [], []),
   'createCourse' : IDL.Func([CreateCourseDto], [Course], []),
   'createProfile' : IDL.Func([CreateUserProfileDto], [UserProfile], []),
+  'deleteEmailUser' : IDL.Func(
+      [IDL.Text],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
   'doesAdminExist' : IDL.Func([], [IDL.Bool], ['query']),
   'enrollCourse' : IDL.Func([IDL.Record({ 'courseId' : CourseId })], [], []),
   'enrollLearnerByEmail' : IDL.Func([CourseId, IDL.Text], [], []),
+  'getAllEmailUsers' : IDL.Func([], [IDL.Vec(EmailUserPublic)], ['query']),
   'getAllUsers' : IDL.Func([], [IDL.Vec(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getCourseAttendees' : IDL.Func(
@@ -110,6 +123,11 @@ export const idlService = IDL.Service({
     ),
   'getCourseReviews' : IDL.Func([CourseId], [IDL.Vec(Review)], ['query']),
   'getCourses' : IDL.Func([], [IDL.Vec(Course)], ['query']),
+  'getEmailUserById' : IDL.Func(
+      [IDL.Text],
+      [IDL.Variant({ 'ok' : EmailUserPublic, 'err' : IDL.Text })],
+      ['query'],
+    ),
   'getEnrollments' : IDL.Func(
       [IDL.Principal],
       [IDL.Vec(Enrollment)],
@@ -135,7 +153,19 @@ export const idlService = IDL.Service({
   'incrementCourseViews' : IDL.Func([CourseId], [], []),
   'isAdmin' : IDL.Func([], [IDL.Bool], ['query']),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+  'loginEmailUser' : IDL.Func(
+      [IDL.Text, IDL.Text],
+      [IDL.Variant({ 'ok' : EmailUserPublic, 'err' : IDL.Text })],
+      ['query'],
+    ),
   'markLessonComplete' : IDL.Func([CourseId, IDL.Text], [], []),
+  'registerEmailUser' : IDL.Func(
+      [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+      [IDL.Variant({ 'ok' : EmailUserPublic, 'err' : IDL.Text })],
+      [],
+    ),
+  'resetDatabase' : IDL.Func([], [], []),
+  'resetEmailUsers' : IDL.Func([], [], []),
   'seedFirstAdmin' : IDL.Func([], [], []),
   'setUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
   'submitQuizAttempt' : IDL.Func(
@@ -145,6 +175,11 @@ export const idlService = IDL.Service({
     ),
   'submitReview' : IDL.Func([CourseId, IDL.Nat, IDL.Text], [], []),
   'updateCourse' : IDL.Func([CourseId, UpdateCourseDto], [Course], []),
+  'updateEmailUserRole' : IDL.Func(
+      [IDL.Text, IDL.Text],
+      [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+      [],
+    ),
   'updateMyProfile' : IDL.Func([UpdateUserProfileDto], [], []),
 });
 
@@ -183,6 +218,13 @@ export const idlFactory = ({ IDL }) => {
     'role' : UserRole,
     'email' : IDL.Text,
     'avatarUrl' : IDL.Text,
+  });
+  const EmailUserPublic = IDL.Record({
+    'id' : IDL.Text,
+    'name' : IDL.Text,
+    'createdAt' : Time,
+    'role' : IDL.Text,
+    'email' : IDL.Text,
   });
   const Review = IDL.Record({
     'principal' : IDL.Principal,
@@ -241,9 +283,15 @@ export const idlFactory = ({ IDL }) => {
     'completeCourse' : IDL.Func([CourseId], [], []),
     'createCourse' : IDL.Func([CreateCourseDto], [Course], []),
     'createProfile' : IDL.Func([CreateUserProfileDto], [UserProfile], []),
+    'deleteEmailUser' : IDL.Func(
+        [IDL.Text],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
     'doesAdminExist' : IDL.Func([], [IDL.Bool], ['query']),
     'enrollCourse' : IDL.Func([IDL.Record({ 'courseId' : CourseId })], [], []),
     'enrollLearnerByEmail' : IDL.Func([CourseId, IDL.Text], [], []),
+    'getAllEmailUsers' : IDL.Func([], [IDL.Vec(EmailUserPublic)], ['query']),
     'getAllUsers' : IDL.Func([], [IDL.Vec(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
     'getCourseAttendees' : IDL.Func(
@@ -253,6 +301,11 @@ export const idlFactory = ({ IDL }) => {
       ),
     'getCourseReviews' : IDL.Func([CourseId], [IDL.Vec(Review)], ['query']),
     'getCourses' : IDL.Func([], [IDL.Vec(Course)], ['query']),
+    'getEmailUserById' : IDL.Func(
+        [IDL.Text],
+        [IDL.Variant({ 'ok' : EmailUserPublic, 'err' : IDL.Text })],
+        ['query'],
+      ),
     'getEnrollments' : IDL.Func(
         [IDL.Principal],
         [IDL.Vec(Enrollment)],
@@ -282,7 +335,19 @@ export const idlFactory = ({ IDL }) => {
     'incrementCourseViews' : IDL.Func([CourseId], [], []),
     'isAdmin' : IDL.Func([], [IDL.Bool], ['query']),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
+    'loginEmailUser' : IDL.Func(
+        [IDL.Text, IDL.Text],
+        [IDL.Variant({ 'ok' : EmailUserPublic, 'err' : IDL.Text })],
+        ['query'],
+      ),
     'markLessonComplete' : IDL.Func([CourseId, IDL.Text], [], []),
+    'registerEmailUser' : IDL.Func(
+        [IDL.Text, IDL.Text, IDL.Text, IDL.Text],
+        [IDL.Variant({ 'ok' : EmailUserPublic, 'err' : IDL.Text })],
+        [],
+      ),
+    'resetDatabase' : IDL.Func([], [], []),
+    'resetEmailUsers' : IDL.Func([], [], []),
     'seedFirstAdmin' : IDL.Func([], [], []),
     'setUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
     'submitQuizAttempt' : IDL.Func(
@@ -292,6 +357,11 @@ export const idlFactory = ({ IDL }) => {
       ),
     'submitReview' : IDL.Func([CourseId, IDL.Nat, IDL.Text], [], []),
     'updateCourse' : IDL.Func([CourseId, UpdateCourseDto], [Course], []),
+    'updateEmailUserRole' : IDL.Func(
+        [IDL.Text, IDL.Text],
+        [IDL.Variant({ 'ok' : IDL.Null, 'err' : IDL.Text })],
+        [],
+      ),
     'updateMyProfile' : IDL.Func([UpdateUserProfileDto], [], []),
   });
 };
