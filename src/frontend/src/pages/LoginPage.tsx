@@ -1,15 +1,13 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Link, Navigate, useNavigate, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { GraduationCap, Loader2, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { useAuthContext } from "../contexts/AuthContext";
 
 export default function LoginPage() {
-  const { login, resetAllAccounts, isAuthenticated, role, loginWithII } =
-    useAuthContext();
-  const search = useSearch({ strict: false }) as { redirect?: string };
+  const { login, resetAllAccounts, loginWithII } = useAuthContext();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState("");
@@ -17,30 +15,19 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Render-time guard: if already authenticated, redirect immediately
-  if (isAuthenticated) {
-    if (search.redirect) return <Navigate to={search.redirect as any} />;
-    if (role === "admin" || role === "instructor")
-      return <Navigate to="/instructor/courses" />;
-    return <Navigate to="/learner/courses" />;
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 300));
     const result = await login(email.trim(), password);
     setIsLoading(false);
     if (!result.success) {
       setError(result.error ?? "Login failed.");
     } else {
-      if (search.redirect) {
-        navigate({ to: search.redirect as any });
-      } else if (result.role === "admin" || result.role === "instructor") {
-        navigate({ to: "/instructor/courses" });
+      if (result.role === "admin" || result.role === "instructor") {
+        navigate({ to: "/instructor/courses", replace: true });
       } else {
-        navigate({ to: "/learner/courses" });
+        navigate({ to: "/learner/courses", replace: true });
       }
     }
   };
@@ -61,7 +48,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex bg-background">
-      {/* Left decorative panel */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-700 to-purple-800 flex-col items-center justify-center p-12 text-white">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(255,255,255,0.12),transparent_60%)]" />
         <div className="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-white/5 blur-3xl" />
@@ -86,7 +72,6 @@ export default function LoginPage() {
               trusted decentralized learning platform.
             </p>
           </div>
-          {/* Default admin hint on left panel */}
           <div className="bg-white/10 rounded-2xl border border-white/20 px-5 py-4 text-left space-y-2">
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-violet-200" />
@@ -106,7 +91,6 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Right form panel */}
       <div className="flex-1 flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-md space-y-8">
           <div className="flex lg:hidden items-center gap-2 mb-2">
@@ -127,7 +111,6 @@ export default function LoginPage() {
             </p>
           </div>
 
-          {/* Default admin credentials hint (mobile / quick fill) */}
           <button
             type="button"
             onClick={fillAdmin}
@@ -212,7 +195,6 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          {/* Internet Identity divider */}
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
               <span className="w-full border-t" />

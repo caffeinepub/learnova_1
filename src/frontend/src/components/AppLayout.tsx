@@ -108,6 +108,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const handleLogout = () => {
     logout();
+    // Explicitly navigate to login — avoids relying on ProtectedRoute's
+    // redirect which can race with the state update.
+    navigate({ to: "/login", replace: true });
   };
 
   return (

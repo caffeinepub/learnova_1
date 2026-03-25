@@ -51,10 +51,9 @@ export function useGlobalAuth() {
 
   const [needsIIRegistration, setNeedsIIRegistration] = useState(false);
 
-  // Actor is ready once it's not null and not fetching
-  const isInitialized = !isFetching;
+  const [authReady] = useState(true);
+  const isInitialized = authReady;
 
-  // Load an II user session from backend + localStorage role
   const loadIISession = useCallback(async (): Promise<boolean> => {
     if (!identity || identity.getPrincipal().isAnonymous() || !actor)
       return false;
@@ -77,10 +76,9 @@ export function useGlobalAuth() {
     }
   }, [identity, actor]);
 
-  // Watch for II login success or existing identity
   useEffect(() => {
     if (!identity || identity.getPrincipal().isAnonymous()) return;
-    if (currentUserRef.current) return; // email session already active
+    if (currentUserRef.current) return;
     if (!actor) return;
 
     const principal = identity.getPrincipal().toString();
@@ -92,7 +90,6 @@ export function useGlobalAuth() {
     }
   }, [identity, actor, loadIISession]);
 
-  // Called from RegisterModal after profile is created
   const finishIIRegistration = useCallback(async () => {
     setNeedsIIRegistration(false);
     const loaded = await loadIISession();
@@ -115,7 +112,7 @@ export function useGlobalAuth() {
       if (!actor)
         return {
           success: false,
-          error: "Service not ready. Please try again.",
+          error: "Service not ready. Please try again in a moment.",
         };
       try {
         const result = await actor.loginEmailUser(email, password);
@@ -153,7 +150,7 @@ export function useGlobalAuth() {
       if (!actor)
         return {
           success: false,
-          error: "Service not ready. Please try again.",
+          error: "Service not ready. Please try again in a moment.",
         };
       try {
         const result = await actor.registerEmailUser(
@@ -183,9 +180,15 @@ export function useGlobalAuth() {
   );
 
   const logout = useCallback(() => {
+    // Only clear II session for II users. For email/password users, clearing the
+    // II AuthClient causes it to be recreated which temporarily nulls the actor
+    // and breaks the next login attempt.
+    const isIIUser = currentUserRef.current?.id?.startsWith("ii:");
     writeSession(null);
     flushSync(() => setCurrentUser(null));
-    ii.clear();
+    if (isIIUser) {
+      ii.clear();
+    }
   }, [ii]);
 
   const updateUser = useCallback(
@@ -258,6 +261,8 @@ export function useGlobalAuth() {
     },
     [actor],
   );
+
+  void isFetching;
 
   return {
     currentUser,

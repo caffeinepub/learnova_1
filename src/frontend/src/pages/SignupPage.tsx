@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Link, Navigate, useNavigate, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import {
   BookOpen,
   GraduationCap,
@@ -15,8 +15,7 @@ import { useAuthContext } from "../contexts/AuthContext";
 type RoleChoice = "instructor" | "learner";
 
 export default function SignupPage() {
-  const { signup, isAuthenticated, role, loginWithII } = useAuthContext();
-  const search = useSearch({ strict: false }) as { redirect?: string };
+  const { signup, loginWithII } = useAuthContext();
   const navigate = useNavigate();
 
   const [name, setName] = useState("");
@@ -26,14 +25,6 @@ export default function SignupPage() {
   const [selectedRole, setSelectedRole] = useState<RoleChoice>("learner");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-
-  // Render-time guard: if already authenticated, redirect immediately
-  if (isAuthenticated) {
-    if (search.redirect) return <Navigate to={search.redirect as any} />;
-    if (role === "admin" || role === "instructor")
-      return <Navigate to="/instructor/courses" />;
-    return <Navigate to="/learner/courses" />;
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,9 +49,7 @@ export default function SignupPage() {
     if (!result.success) {
       setError(result.error ?? "Signup failed.");
     } else {
-      if (search.redirect) {
-        navigate({ to: search.redirect as any });
-      } else if (result.role === "admin" || result.role === "instructor") {
+      if (result.role === "admin" || result.role === "instructor") {
         navigate({ to: "/instructor/courses" });
       } else {
         navigate({ to: "/learner/courses" });
